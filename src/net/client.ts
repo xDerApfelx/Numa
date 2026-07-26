@@ -11,10 +11,13 @@ export class NumaClient {
   onError: ((message: string) => void) | null = null
   onDisconnect: (() => void) | null = null
 
-  private constructor(
-    private peer: Peer,
-    private conn: DataConnection,
-  ) {}
+  private peer: Peer
+  private conn: DataConnection
+
+  private constructor(peer: Peer, conn: DataConnection) {
+    this.peer = peer
+    this.conn = conn
+  }
 
   static join(codeInput: string, name: string): Promise<NumaClient> {
     return new Promise((resolve, reject) => {
