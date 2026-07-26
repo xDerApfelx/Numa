@@ -1,0 +1,28 @@
+:root {
+  --bg: #17171c;
+  --panel: #211f26;
+  --ink: #f2efe9;
+  --red: #e6403a;
+  --green: #39b54a;
+  --blue: #2e9bd6;
+  --yellow: #f5a623;
+  --accent: var(--red);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+}
+
+.screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
