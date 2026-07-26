@@ -232,7 +232,7 @@ export class NumaHost {
     return { code: this.code, players: this.players, options: this.options, hostId: HOST_PLAYER_ID }
   }
 
-  private broadcastLobby() {
+  broadcastLobby() {
     const lobby = this.lobbySnapshot()
     this.onLobby?.(lobby)
     for (const [playerId, conn] of this.conns) {
