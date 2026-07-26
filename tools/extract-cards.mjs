@@ -67,10 +67,13 @@ function normalizeSvg(raw, bounds) {
   const dx = (pageW - TRIM_W) / 2
   const dy = (pageH - TRIM_H) / 2
   const vb = [dx.toFixed(3), dy.toFixed(3), TRIM_W.toFixed(3), TRIM_H.toFixed(3)].join(' ')
+  // width/height müssen gesetzt bleiben: ohne intrinsische Größe skalieren
+  // manche Browser ein <img src="…svg"> nicht zuverlässig.
+  const attrs = `width="${TRIM_W.toFixed(3)}" height="${TRIM_H.toFixed(3)}" viewBox="${vb}"`
 
   return raw
     .replace(/-?\d+\.\d+/g, (x) => String(Math.round(parseFloat(x) * 100) / 100))
-    .replace(/(<svg[^>]*?)\swidth="[^"]*"\sheight="[^"]*"\sviewBox="[^"]*"/, `$1 viewBox="${vb}"`)
+    .replace(/(<svg[^>]*?)\swidth="[^"]*"\sheight="[^"]*"\sviewBox="[^"]*"/, `$1 ${attrs}`)
     .replace(/>\s+</g, '><')
     .trim()
 }

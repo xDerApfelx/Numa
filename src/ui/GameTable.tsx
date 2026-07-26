@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ResolutionStep } from '../game/resolve'
-import { isJoker, type AnyCard, type Direction, type JokerCard } from '../game/types'
+import { isJoker, type AnyCard, type Direction, type HandCard, type JokerCard } from '../game/types'
 import type { NumaClient } from '../net/client'
 import type { NumaHost } from '../net/host'
 import type { PublicState } from '../net/protocol'
-import { actionLabel, CardView, jokerLabel, type CardFaceProps } from './CardView'
+import { actionLabel, CardView, jokerLabel, type CardState } from './CardView'
 
 const STEP_MS = 1100
 
-type FaceMap = Record<string, CardFaceProps>
+/** Je Sitzplatz: die dort liegende Karte und was sie aktuell zählt. */
+type FaceMap = Record<string, { card: HandCard; state: CardState }>
 
 export function GameTable({
   pub,
@@ -100,13 +101,14 @@ export function GameTable({
     return () => clearInterval(t)
   }, [pub.phase, pub.round, steps])
 
-  // Karten-Gesichter je Spieler nach den ersten `stepIndex` Steps
+  // Zustand je Sitzplatz nach den ersten `stepIndex` Steps: welche Karte dort
+  // liegt (kann durch "Alle verschieben" wandern) und was sie gerade zählt.
   const faces: FaceMap = useMemo(() => {
     const map: FaceMap = {}
     if (!pub.revealed) return map
     const seatIds = pub.players.map((p) => p.id)
     pub.revealed.forEach((p, seat) => {
-      map[seatIds[seat]] = { color: p.card.color, value: p.card.value, action: p.card.action }
+      map[seatIds[seat]] = { card: p.card, state: { color: p.card.color, value: p.card.value } }
     })
     for (let k = 0; k < Math.min(stepIndex, steps.length); k++) {
       const s = steps[k]
@@ -120,7 +122,8 @@ export function GameTable({
         Object.assign(map, rotated)
       } else if (s.type === 'action' || s.type === 'reflected') {
         for (const ch of s.changes) {
-          map[ch.playerId] = { ...map[ch.playerId], color: ch.after.color, value: ch.after.value }
+          const entry = map[ch.playerId]
+          if (entry) map[ch.playerId] = { ...entry, state: { color: ch.after.color, value: ch.after.value } }
         }
       }
     }
@@ -170,7 +173,8 @@ export function GameTable({
     .slice(0, pub.players.length - 1)
 
   const seatColor = (id: string) => {
-    const palette = ['#e6403a', '#2e9bd6', '#3fb54a', '#f5a028', '#8a63c9', '#a49fab']
+    // Sitzfarben aus der Numa-Palette (Logo-Farben plus das Joker-Violett)
+    const palette = ['#ec3959', '#008295', '#24b457', '#f9ab2c', '#9867ab', '#a49fab']
     return palette[pub.players.findIndex((p) => p.id === id) % palette.length]
   }
 
@@ -178,12 +182,12 @@ export function GameTable({
     const seat = pub.players.findIndex((p) => p.id === playerId)
     const player = pub.players[seat]
     if (pub.revealed) {
-      const face = faces[playerId]
+      const entry = faces[playerId]
       const playedJoker = pub.revealed[seat]?.joker
       return (
         <div className={`played-slot ${highlightIds.has(playerId) ? 'highlight' : ''}`}>
-          {face && <CardView width={86} face={face} />}
-          {playedJoker && <CardView width={50} joker={playedJoker.card.joker} />}
+          {entry && <CardView width={86} card={entry.card} state={entry.state} />}
+          {playedJoker && <CardView width={50} card={playedJoker.card} />}
         </div>
       )
     }
@@ -325,7 +329,7 @@ export function GameTable({
               <CardView
                 key={c.id}
                 width={96}
-                joker={c.joker}
+                card={c}
                 selected={jokerId === c.id || selectedId === c.id}
                 dimmed={!myTurn || (!onlyJokersInHand && !selectedCard) || !pub.options.jokersEnabled}
                 onClick={
@@ -339,17 +343,15 @@ export function GameTable({
                       }
                     : undefined
                 }
-                title={jokerLabel(c.joker)}
               />
             ) : (
               <CardView
                 key={c.id}
                 width={96}
-                face={{ color: c.color, value: c.value, action: c.action }}
+                card={c}
                 selected={selectedId === c.id}
                 dimmed={!myTurn}
                 onClick={myTurn ? () => setSelectedId(selectedId === c.id ? null : c.id) : undefined}
-                title={actionLabel(c.action)}
               />
             ),
           )}
@@ -379,8 +381,7 @@ export function GameTable({
                     <CardView
                       key={c.id}
                       width={72}
-                      face={isJoker(c) ? undefined : { color: c.color, value: c.value, action: c.action }}
-                      joker={isJoker(c) ? c.joker : undefined}
+                      card={c}
                       selected={blackSelection.has(c.id)}
                       onClick={() =>
                         setBlackSelection((prev) => {

@@ -1,17 +1,19 @@
 /* Numa Design-Tokens — abgeleitet aus den physischen Karten-Assets:
    dunkles Anthrazit, die vier Kartenfarben, roter Pfeil-Akzent des Logos. */
+/* Farben exakt aus dem nu·ma-Logo auf der Kartenrückseite (PDF/). */
 :root {
-  --bg: #141318;
-  --bg-glow: #1d1b22;
-  --panel: #211f27;
-  --panel-raised: #2a2731;
+  --bg: #131217;
+  --bg-glow: #1c1a21;
+  --panel: #201e26;
+  --panel-raised: #292630;
   --line: #38343f;
   --ink: #f2efe9;
   --ink-dim: #a49fab;
-  --red: #e6403a;
-  --green: #3fb54a;
-  --blue: #2e9bd6;
-  --yellow: #f5a028;
+  --red: #ec3959;
+  --green: #24b457;
+  --blue: #008295;
+  --yellow: #f9ab2c;
+  --purple: #9867ab;
   --accent: var(--red);
   --radius: 14px;
   --radius-card: 12px;
@@ -330,13 +332,13 @@ button:focus-visible,
 }
 
 .round-banner.win {
-  background: rgba(63, 181, 74, 0.14);
+  background: rgba(36, 180, 87, 0.14);
   border: 1.5px solid var(--green);
   color: var(--green);
 }
 
 .round-banner.tie {
-  background: rgba(245, 160, 40, 0.12);
+  background: rgba(249, 171, 44, 0.12);
   border: 1.5px solid var(--yellow);
   color: var(--yellow);
 }
@@ -420,18 +422,29 @@ button:focus-visible,
 /* ---- Karten ---- */
 
 .card {
+  position: relative;
   display: block;
-  border-radius: 10px;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
-  transition: transform 140ms ease, filter 140ms ease;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 9px;
+  overflow: hidden;
   flex-shrink: 0;
+  container-type: inline-size;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
-.card text,
-.card path,
-.card rect,
-.card circle {
-  transition: fill 400ms ease, stroke 400ms ease;
+.card-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: transform 300ms ease;
+}
+
+.card-empty {
+  border: 1.5px dashed var(--line);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .card-clickable {
@@ -440,26 +453,68 @@ button:focus-visible,
 
 .card-clickable:hover {
   transform: translateY(-8px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
 }
 
 .card-selected {
   transform: translateY(-12px);
-  filter: drop-shadow(0 0 0 transparent) drop-shadow(0 6px 14px rgba(230, 64, 58, 0.45));
-  outline: 2.5px solid var(--accent);
-  outline-offset: -1px;
-  border-radius: 10px;
+  box-shadow: 0 0 0 3px var(--accent), 0 10px 22px rgba(236, 57, 89, 0.4);
 }
 
 .card-dimmed {
-  opacity: 0.45;
+  opacity: 0.5;
+}
+
+/* Karte zählt nach den Aktionen etwas anderes als aufgedruckt */
+.card-modified {
+  box-shadow: 0 0 0 3px var(--card-state-color), 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.card-state {
+  position: absolute;
+  right: 5%;
+  bottom: 5%;
+  min-width: 34%;
+  height: 26%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card-state-color);
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  border-radius: 999px;
+  animation: state-pop 320ms ease;
+}
+
+.card-state-value {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(12px, 15cqw, 30px);
+  line-height: 1;
+  color: #16151a;
+}
+
+.card-state-dot {
+  width: 40%;
+  height: 55%;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+@keyframes state-pop {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .card text,
-  .card path,
-  .card rect,
-  .card circle,
+  .card-art,
+  .card-state,
   .btn {
     transition: none !important;
     animation: none !important;
