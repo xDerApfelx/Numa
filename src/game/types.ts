@@ -14,7 +14,7 @@ export type JokerKind = 'shiftAll' | 'newRule' | 'secondWins' | 'onlyOwnAction'
 export type Direction = 'left' | 'right' | 'self'
 
 export interface GameOptions {
-  targetScore: number // Infinity = Endlosspiel
+  targetScore: number // 0 = Endlosspiel
   jokersEnabled: boolean
 }
 
