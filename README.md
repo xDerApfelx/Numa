@@ -2,6 +2,8 @@
 
 Das selbst entworfene Kartenspiel **Numa** als browserbasiertes Multiplayer-Spiel — per Link spielbar, ohne Installation, ohne Server-Kosten.
 
+> **Alle Rechte vorbehalten.** Dieses Repository ist aus Hosting-Gründen öffentlich einsehbar, das ist keine Nutzungserlaubnis. Siehe [LICENSE](LICENSE) — keine kommerzielle Nutzung, kein Kopieren, keine Weiterverbreitung ohne Erlaubnis.
+
 **Spielen:** https://xderapfelx.github.io/Numa/
 
 ## Wie es funktioniert

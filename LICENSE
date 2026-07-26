@@ -1,0 +1,46 @@
+Numa — Proprietary License (All Rights Reserved)
+
+Copyright (c) 2026 xDerApfelx. All rights reserved.
+
+This repository and its contents — including but not limited to source code,
+game rules text, card designs, artwork, images, PDFs, the "Numa" and "nu·ma"
+names and logo, and any other files in this repository (collectively, the
+"Work") — are the exclusive property of the copyright holder.
+
+NO LICENSE IS GRANTED. Unless you have received prior written permission
+from the copyright holder, you may NOT:
+
+  1. Copy, reproduce, or redistribute the Work, in whole or in part, in any
+     form or medium.
+  2. Use the Work, in whole or in part, for any commercial purpose,
+     including but not limited to selling, licensing, sublicensing, or
+     otherwise monetizing the Work or any derivative of it.
+  3. Create derivative works based on the Work (including but not limited
+     to modified versions of the game, the software, the rules, or the
+     artwork).
+  4. Publish, host, or distribute the Work or any derivative of it, whether
+     for free or for payment.
+  5. Use the "Numa" or "nu·ma" name, logo, or branding to identify any
+     product, service, or project other than this one.
+
+Viewing the source code of this repository on a public code-hosting
+platform (such as GitHub) does not constitute permission to use it under
+any of the above terms. Public visibility is a hosting necessity, not a
+license grant.
+
+PERMITTED USE: You may view, clone, and run this repository locally for
+your own personal, non-commercial evaluation only (e.g. to play the game
+with friends via the hosted link, or to inspect the code). No other rights
+are granted or implied.
+
+Note on scope: this license covers the specific expression contained in
+this repository — the code, text, and artwork. It does not, and cannot,
+grant or claim any patent, trademark registration, or other statutory
+right beyond what automatically attaches to that expression under
+copyright law. Separate legal steps (trademark registration, and, if ever
+pursued, a patent application through a qualified attorney) would be
+required to obtain protection beyond copyright, and are not covered by
+this file.
+
+For permission requests, contact the copyright holder via the repository's
+GitHub page (https://github.com/xDerApfelx/Numa).
