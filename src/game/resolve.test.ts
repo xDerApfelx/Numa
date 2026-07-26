@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveRound, type PlayedCard } from './resolve'
-import type { ActionKind, Color, Direction, HandCard, RuleCard } from './types'
+import type { Direction, HandCard, RuleCard } from './types'
 
 let nextId = 0
 function hc(over: Partial<HandCard>): HandCard {

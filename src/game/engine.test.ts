@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyEvent, createGame, type GameState } from './engine'
-import { isJoker, type Color, type HandCard, type JokerCard, type RuleCard } from './types'
+import { isJoker, type AnyCard, type Color, type HandCard, type JokerCard, type RuleCard } from './types'
 
 const PLAYERS = [
   { id: 'p0', name: 'Anna', isBot: false },
@@ -23,7 +23,7 @@ const RED_HIGH: RuleCard = { id: 'xr-red', color: 'red', parity: null, range: 'h
 const BLACK: RuleCard = { id: 'xr-black', color: null, parity: null, range: null, black: true }
 
 // Präpariert eine Runde mit fest vorgegebenen Handkarten und Regel.
-function rigged(hands: HandCard[][], rule: RuleCard = RED_HIGH): GameState {
+function rigged(hands: AnyCard[][], rule: RuleCard = RED_HIGH): GameState {
   const s = newGame()
   s.players.forEach((p, i) => (p.hand = [...hands[i]]))
   s.ruleDeck = [rule, ...s.ruleDeck.filter((r) => !r.black)]
