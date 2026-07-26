@@ -260,8 +260,9 @@ export function GameTable({
         </button>
       </header>
 
-      <section className="opponents">
-        {opponents.map((p) => {
+      <div className="table-middle">
+        <section className="opponents">
+          {opponents.map((p) => {
           const seat = pub.players.findIndex((q) => q.id === p.id)
           const isTurn = pub.phase === 'playing' && seat === pub.turnIndex
           return (
@@ -308,7 +309,8 @@ export function GameTable({
               : `${nameOf(pub.players[pub.turnIndex]?.id ?? '')} ist dran …`}
           </p>
         )}
-      </section>
+        </section>
+      </div>
 
       <section className="you-area">
         <div className={`you-info ${myTurn ? 'turn' : ''}`}>
@@ -437,13 +439,13 @@ function DirectionPicker({
 
   return (
     <div className="direction-picker panel">
-      <span className="field-label">Pfeil ausrichten</span>
+      <span className="field-label">Pfeil auf</span>
       <div className="direction-row">
         {(
           [
-            ['left', '◀ Linker Nachbar'],
-            ['self', 'Auf dich selbst'],
-            ['right', 'Rechter Nachbar ▶'],
+            ['left', '◀ Links'],
+            ['self', 'Dich selbst'],
+            ['right', 'Rechts ▶'],
           ] as [Direction, string][]
         ).map(([dir, label]) => (
           <button
@@ -455,31 +457,37 @@ function DirectionPicker({
           </button>
         ))}
       </div>
+
       {jokerSelected && (
-        <div className="direction-row">
-          <span style={{ color: 'var(--ink-dim)', fontSize: 13 }}>
-            Joker „{jokerLabel(jokerSelected.joker)}" wird mitgespielt
-          </span>
-          {needsJokerDirection && (
-            <>
-              <button
-                className={`btn btn-small ${jokerDirection === 'left' ? 'toggle on' : ''}`}
-                onClick={() => setJokerDirection('left')}
-              >
-                ◀ Joker links
-              </button>
-              <button
-                className={`btn btn-small ${jokerDirection === 'right' ? 'toggle on' : ''}`}
-                onClick={() => setJokerDirection('right')}
-              >
-                Joker rechts ▶
-              </button>
-            </>
-          )}
-        </div>
+        <>
+          <span className="direction-sep" />
+          <div className="direction-row">
+            <span style={{ color: 'var(--ink-dim)', fontSize: 13 }}>
+              + {jokerLabel(jokerSelected.joker)}
+            </span>
+            {needsJokerDirection && (
+              <>
+                <button
+                  className={`btn btn-small ${jokerDirection === 'left' ? 'toggle on' : ''}`}
+                  onClick={() => setJokerDirection('left')}
+                >
+                  ◀ Joker
+                </button>
+                <button
+                  className={`btn btn-small ${jokerDirection === 'right' ? 'toggle on' : ''}`}
+                  onClick={() => setJokerDirection('right')}
+                >
+                  Joker ▶
+                </button>
+              </>
+            )}
+          </div>
+        </>
       )}
+
+      <span className="direction-sep" />
       <button
-        className="btn btn-primary"
+        className="btn btn-primary btn-small"
         disabled={direction === null}
         onClick={() => direction && onPlay(direction, jokerSelected ? (needsJokerDirection ? jokerDirection : 'self') : null)}
       >

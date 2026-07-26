@@ -108,8 +108,6 @@ export function CardView({
   onClick?: () => void
   label?: string
 }) {
-  const height = Math.round((width * 96) / 66)
-
   let src: string
   let title: string
   if (back) {
@@ -122,7 +120,13 @@ export function CardView({
     src = artUrl(cardArtPath(card))
     title = cardTitle(card)
   } else {
-    return <span className="card card-empty" style={{ width, height }} aria-hidden="true" />
+    return (
+      <span
+        className="card card-empty"
+        style={{ '--card-w-default': `${width}px` } as React.CSSProperties}
+        aria-hidden="true"
+      />
+    )
   }
 
   // Der Pfeil auf der Rückseite zeigt im Original nach oben.
@@ -149,8 +153,10 @@ export function CardView({
         .join(' ')}
       style={
         {
-          width,
-          height,
+          // Breite als Variable, damit die Stylesheets sie auf flachen
+          // Viewports herunterskalieren können; die Höhe folgt dem
+          // Seitenverhältnis der echten Karte (66 x 96 mm).
+          '--card-w-default': `${width}px`,
           '--card-state-color':
             state?.color != null ? COLOR_HEX[state.color] : modified ? 'var(--ink-dim)' : 'transparent',
         } as React.CSSProperties

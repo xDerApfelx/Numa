@@ -23,9 +23,21 @@ npm test         # Vitest — komplette Spiellogik ist getestet
 npm run build    # Produktions-Build nach dist/
 ```
 
-Struktur: `src/game/` (pure, getestete Spiellogik), `src/net/` (PeerJS Host/Client + Protokoll), `src/ui/` (React-Komponenten, SVG-Karten). Karten-Galerie zur Sichtprüfung: `/?gallery`.
+Struktur: `src/game/` (pure, getestete Spiellogik), `src/net/` (PeerJS Host/Client + Protokoll), `src/ui/` (React-Komponenten). Karten-Galerie zur Sichtprüfung: `/?gallery`.
 
-Die Ziel-Häufigkeiten der Aktionsverteilung sind Platzhalter in [src/game/config.ts](src/game/config.ts) (`ACTION_FREQUENCIES`) — dort die echten Balance-Werte eintragen, Summe muss 108 bleiben.
+## Kartengrafiken
+
+Die Karten im Spiel sind die echten Druckvorlagen aus [PDF/](PDF/). Sie werden nicht von Hand nachgebaut, sondern extrahiert:
+
+```bash
+node tools/extract-cards.mjs
+```
+
+Das schreibt 147 Vektor-SVGs nach `public/cards/` (auf das Endformat 66×96 mm beschnitten, Schrift als Pfade eingebettet) und generiert `src/game/deckData.ts` mit der tatsächlichen Deck-Zusammensetzung. Nur nötig, wenn sich die Druckdateien ändern.
+
+Damit steht auch die Aktion-zu-Zahl-Zuordnung fest — sie kommt aus dem physischen Spiel statt pro Session gewürfelt zu werden, denn die Aktion ist auf der gedruckten Karte zu sehen. Die im Team ausbalancierten Häufigkeiten sind: je 28× „Wert erhöhen“, „Wert senken“ und „Aktion abwehren“, je 12× „Aktion reflektieren“ und „Farbe tauschen“ — gleichmäßig über die vier Farben (7/7/7/3/3 pro Farbe).
+
+Weil die Aktion aufgedruckt ist, lässt sich eine durch Aktionen veränderte Karte nicht als andere Grafik darstellen. Stattdessen zeigt die Oberfläche die gedruckte Karte plus ein Overlay mit dem Wert bzw. der Farbe, die sie gerade zählt.
 
 ## Deployment
 
