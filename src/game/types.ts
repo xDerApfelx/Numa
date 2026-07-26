@@ -24,6 +24,8 @@ export interface HandCard {
   color: Color | null // colorless => null
   value: number | null // numberless => null
   action: ActionKind // colorless => 'copyColor', numberless => 'copyValue'
+  /** Nur für Sonderfälle gesetzt (allein abgeworfener Joker), sonst abgeleitet */
+  art?: string
 }
 
 export interface JokerCard {

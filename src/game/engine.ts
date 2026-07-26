@@ -148,8 +148,15 @@ function applyPlay(s: GameState, ev: Extract<GameEvent, { type: 'play' }>) {
     }
     if (ev.jokerId) throw new Error('Joker können nicht kombiniert werden')
     // Der Joker wandert sofort in die Ablage; am Tisch liegt eine
-    // wirkungslose Platzhalter-Karte.
-    card = { id: `${rawCard.id}-discarded`, kind: 'colorless', color: null, value: null, action: 'none' }
+    // wirkungslose Platzhalter-Karte, die weiterhin die Joker-Grafik zeigt.
+    card = {
+      id: `${rawCard.id}-discarded`,
+      kind: 'colorless',
+      color: null,
+      value: null,
+      action: 'none',
+      art: `joker/${rawCard.joker}`,
+    }
     player.hand.splice(cardIdx, 1)
     s.discard.push(rawCard)
     s.played[seat] = { playerId: ev.playerId, card, direction: ev.direction, joker: null }

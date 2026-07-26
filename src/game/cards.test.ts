@@ -68,21 +68,44 @@ describe('buildDrawDeck', () => {
     expect(new Set(deck.map((c) => c.id)).size).toBe(deck.length)
   })
 
-  it('ist deterministisch je Seed, verschieden je Seed (auch die Aktionsverteilung)', () => {
+  it('ist deterministisch je Seed; verschiedene Seeds mischen nur die Reihenfolge', () => {
     const a = buildDrawDeck(mulberry32(8), true)
     const b = buildDrawDeck(mulberry32(8), true)
     expect(a).toEqual(b)
+
     const c = buildDrawDeck(mulberry32(9), true)
     expect(a).not.toEqual(c)
-    // Aktionszuordnung je (Farbe, Wert, Kopie) unterscheidet sich zwischen Seeds
-    const key = (h: HandCard) => `${h.color}-${h.value}`
-    const actionsBySlot = (deck: typeof a) =>
-      handCards(deck)
-        .filter((h) => h.kind === 'number')
-        .sort((x, y) => (key(x) + x.action).localeCompare(key(y) + y.action))
-        .map((h) => key(h) + ':' + h.action)
+    // Die Zusammensetzung ist fest (physisches Spiel) — nur die Ordnung variiert
+    const fingerprint = (deck: typeof a) =>
+      deck
+        .map((x) => x.id)
+        .sort()
         .join(',')
-    expect(actionsBySlot(a)).not.toEqual(actionsBySlot(c))
+    expect(fingerprint(a)).toEqual(fingerprint(c))
+  })
+
+  it('bildet die Aktion-zu-Zahl-Zuordnung des physischen Spiels ab', () => {
+    const numbers = handCards(buildDrawDeck(mulberry32(11), false)).filter((c) => c.kind === 'number')
+    const actionsOf = (color: HandCard['color'], value: number) =>
+      numbers
+        .filter((c) => c.color === color && c.value === value)
+        .map((c) => c.action)
+        .sort()
+    // Stichproben direkt aus den Druck-PDFs
+    expect(actionsOf('red', 1)).toEqual(['minus', 'minus', 'shield'])
+    expect(actionsOf('red', 2)).toEqual(['mirror', 'plus', 'swapColor'])
+    expect(actionsOf('yellow', 9)).toEqual(['minus', 'mirror', 'plus'])
+  })
+
+  it('verteilt die Aktionen gleichmäßig über alle vier Farben', () => {
+    const numbers = handCards(buildDrawDeck(mulberry32(12), false)).filter((c) => c.kind === 'number')
+    for (const color of COLORS) {
+      const perColor = numbers.filter((c) => c.color === color)
+      expect(perColor).toHaveLength(27)
+      for (const [action, total] of Object.entries(ACTION_FREQUENCIES)) {
+        expect(perColor.filter((c) => c.action === action)).toHaveLength(total / 4)
+      }
+    }
   })
 })
 

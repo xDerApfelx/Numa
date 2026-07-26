@@ -1,15 +1,9 @@
-import type { GameOptions, NumberAction } from './types'
+import type { GameOptions } from './types'
 
-// Platzhalter-Häufigkeiten für die dynamische Aktion→Zahl-Verteilung der 108
-// Zahlenkarten. Bero liefert die im Team berechneten Zielwerte nach —
-// dann nur diese Zahlen anpassen, Summe muss 108 bleiben.
-export const ACTION_FREQUENCIES: Record<NumberAction, number> = {
-  plus: 24,
-  minus: 24,
-  shield: 20,
-  mirror: 16,
-  swapColor: 24,
-}
+// Die tatsächlichen Aktions-Häufigkeiten des physischen Spiels stammen jetzt
+// direkt aus den Druck-PDFs (siehe deckData.ts) — 28x plus/minus/Schild und
+// je 12x Spiegel/Farbe tauschen, gleichmäßig über die vier Farben verteilt.
+export { ACTION_FREQUENCIES } from './deckData'
 
 export const HAND_SIZE = 7
 

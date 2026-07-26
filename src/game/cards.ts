@@ -1,82 +1,94 @@
-import { ACTION_FREQUENCIES } from './config'
-import { shuffle, type Rng } from './rng'
 import {
-  COLORS,
-  JOKER_KINDS,
-  type AnyCard,
-  type HandCard,
-  type NumberAction,
-  type RuleCard,
-} from './types'
+  COLORLESS_VALUES,
+  JOKER_CARDS,
+  NUMBERED_CARDS,
+  NUMBERLESS_COLORS,
+  RULE_CARDS,
+} from './deckData'
+import { shuffle, type Rng } from './rng'
+import { isJoker, type AnyCard, type HandCard, type RuleCard } from './types'
 
-// Zieh-Deck: 108 Zahlenkarten (Aktionen pro Session zufällig nach
-// ACTION_FREQUENCIES auf die Slots verteilt) + 12 zahlenlose + 18 farblose
-// [+ 8 Joker], fertig gemischt.
+// Zieh-Deck: die tatsächliche Zusammensetzung des physischen Spiels —
+// 108 Zahlenkarten (die Aktion-zu-Zahl-Zuordnung ist im Team ausbalanciert und
+// steht fest in deckData.ts, generiert aus den Druck-PDFs), 12 zahlenlose,
+// 18 farblose und optional 8 Joker. Fertig gemischt.
 export function buildDrawDeck(rng: Rng, jokersEnabled: boolean): AnyCard[] {
-  const actionPool: NumberAction[] = []
-  for (const [action, count] of Object.entries(ACTION_FREQUENCIES) as [NumberAction, number][]) {
-    for (let i = 0; i < count; i++) actionPool.push(action)
-  }
-  const actions = shuffle(actionPool, rng)
-
   const deck: AnyCard[] = []
-  let slot = 0
-  for (const color of COLORS) {
-    for (let value = 1; value <= 9; value++) {
-      for (let copy = 0; copy < 3; copy++) {
-        deck.push({
-          id: `n-${color}-${value}-${copy}`,
-          kind: 'number',
-          color,
-          value,
-          action: actions[slot++],
-        } satisfies HandCard)
-      }
-    }
+  const seen = new Map<string, number>()
+
+  // Mehrfach-Exemplare derselben Karte brauchen verschiedene IDs.
+  const uniqueId = (base: string) => {
+    const n = seen.get(base) ?? 0
+    seen.set(base, n + 1)
+    return `${base}#${n}`
   }
 
-  for (const color of COLORS) {
-    for (let copy = 0; copy < 3; copy++) {
-      deck.push({ id: `q-${color}-${copy}`, kind: 'numberless', color, value: null, action: 'copyValue' })
-    }
+  for (const c of NUMBERED_CARDS) {
+    deck.push({
+      id: uniqueId(`n-${c.color}-${c.value}-${c.action}`),
+      kind: 'number',
+      color: c.color,
+      value: c.value,
+      action: c.action,
+    } satisfies HandCard)
   }
 
-  for (let value = 1; value <= 9; value++) {
-    for (let copy = 0; copy < 2; copy++) {
-      deck.push({ id: `c-${value}-${copy}`, kind: 'colorless', color: null, value, action: 'copyColor' })
-    }
+  for (const value of COLORLESS_VALUES) {
+    deck.push({
+      id: uniqueId(`c-${value}`),
+      kind: 'colorless',
+      color: null,
+      value,
+      action: 'copyColor',
+    })
+  }
+
+  for (const color of NUMBERLESS_COLORS) {
+    deck.push({
+      id: uniqueId(`q-${color}`),
+      kind: 'numberless',
+      color,
+      value: null,
+      action: 'copyValue',
+    })
   }
 
   if (jokersEnabled) {
-    for (const joker of JOKER_KINDS) {
-      for (let copy = 0; copy < 2; copy++) {
-        deck.push({ id: `j-${joker}-${copy}`, kind: 'joker', joker })
-      }
+    for (const joker of JOKER_CARDS) {
+      deck.push({ id: uniqueId(`j-${joker}`), kind: 'joker', joker })
     }
   }
 
   return shuffle(deck, rng)
 }
 
-// Die 7 offiziellen Bedingungen je Farbe (aus Alle_Regelkarten.pdf).
-const RULE_CONDITIONS: { parity: RuleCard['parity']; range: RuleCard['range'] }[] = [
-  { parity: null, range: 'low' },
-  { parity: null, range: 'high' },
-  { parity: 'even', range: 'high' },
-  { parity: 'odd', range: 'high' },
-  { parity: 'even', range: 'low' },
-  { parity: 'odd', range: 'low' },
-  { parity: null, range: 'mid' },
-]
-
 export function buildRuleDeck(rng: Rng): RuleCard[] {
-  const deck: RuleCard[] = []
-  for (const color of COLORS) {
-    RULE_CONDITIONS.forEach((cond, i) => {
-      deck.push({ id: `r-${color}-${i}`, color, parity: cond.parity, range: cond.range, black: false })
-    })
+  return shuffle(
+    RULE_CARDS.map((r) => ({ ...r })),
+    rng,
+  )
+}
+
+/** Pfad zur Regelkarten-Grafik unter public/cards/ (ohne Endung). */
+export function ruleArtPath(rule: RuleCard): string {
+  if (rule.black) return 'rule/black'
+  return `rule/${rule.color}-${rule.parity ?? 'any'}-${rule.range}`
+}
+
+/**
+ * Pfad zur Kartengrafik unter public/cards/ (ohne Endung). Die Grafik zeigt
+ * die aufgedruckte Karte — durch Aktionen veränderte Werte werden in der
+ * Oberfläche zusätzlich eingeblendet, nicht in die Grafik gerechnet.
+ */
+export function cardArtPath(card: AnyCard): string {
+  if (isJoker(card)) return `joker/${card.joker}`
+  if (card.art) return card.art
+  switch (card.kind) {
+    case 'colorless':
+      return `colorless/${card.value}`
+    case 'numberless':
+      return `numberless/${card.color}`
+    default:
+      return `number/${card.color}-${card.value}-${card.action}`
   }
-  deck.push({ id: 'r-black-0', color: null, parity: null, range: null, black: true })
-  deck.push({ id: 'r-black-1', color: null, parity: null, range: null, black: true })
-  return shuffle(deck, rng)
 }
