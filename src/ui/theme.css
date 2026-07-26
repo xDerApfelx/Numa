@@ -161,6 +161,55 @@ button:focus-visible,
   text-align: center;
 }
 
+/* ---- Karten ---- */
+
+.card {
+  display: block;
+  border-radius: 10px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+  transition: transform 140ms ease, filter 140ms ease;
+  flex-shrink: 0;
+}
+
+.card text,
+.card path,
+.card rect,
+.card circle {
+  transition: fill 400ms ease, stroke 400ms ease;
+}
+
+.card-clickable {
+  cursor: pointer;
+}
+
+.card-clickable:hover {
+  transform: translateY(-8px);
+}
+
+.card-selected {
+  transform: translateY(-12px);
+  filter: drop-shadow(0 0 0 transparent) drop-shadow(0 6px 14px rgba(230, 64, 58, 0.45));
+  outline: 2.5px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: 10px;
+}
+
+.card-dimmed {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card text,
+  .card path,
+  .card rect,
+  .card circle,
+  .btn {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 /* ---- Lobby ---- */
 
 .lobby-panel {

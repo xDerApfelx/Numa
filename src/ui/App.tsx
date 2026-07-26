@@ -4,10 +4,12 @@ import { NumaClient } from '../net/client'
 import { NumaHost, HOST_PLAYER_ID } from '../net/host'
 import type { LobbySnapshot, PublicState } from '../net/protocol'
 import { GameTable } from './GameTable'
+import { Gallery } from './Gallery'
 import { Home } from './Home'
 import { Lobby } from './Lobby'
 
 export function App() {
+  const isGallery = new URLSearchParams(window.location.search).has('gallery')
   const hostRef = useRef<NumaHost | null>(null)
   const clientRef = useRef<NumaClient | null>(null)
   const [lobby, setLobby] = useState<LobbySnapshot | null>(null)
@@ -88,6 +90,9 @@ export function App() {
   const leave = () => reset()
 
   let screen
+  if (isGallery) {
+    return <Gallery />
+  }
   if (pub) {
     screen = (
       <GameTable
