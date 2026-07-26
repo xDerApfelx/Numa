@@ -1,32 +1,34 @@
-# React + TypeScript + Vite
+# nu·ma
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Das selbst entworfene Kartenspiel **Numa** als browserbasiertes Multiplayer-Spiel — per Link spielbar, ohne Installation, ohne Server-Kosten.
 
-Currently, two official plugins are available:
+**Spielen:** https://xderapfelx.github.io/Numa/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Wie es funktioniert
 
-## React Compiler
+- 2–6 Spieler, ca. 20 Minuten. Ein Spieler erstellt einen Raum und teilt den 5-stelligen Code (oder den Einladungslink), die anderen treten bei. Freie Plätze lassen sich mit Bots füllen.
+- Multiplayer läuft über WebRTC ([PeerJS](https://peerjs.com/)): Der Host-Browser führt die Spiellogik aus, alle anderen verbinden sich direkt mit ihm — es gibt keinen eigenen Server.
+- Punkteziel und Joker sind in der Lobby einstellbar.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Die vollständigen Regeln stehen in der physischen Anleitung ([PDF/](PDF/)) bzw. in [numa-projektplan.md](numa-projektplan.md).
 
-## Expanding the Oxlint configuration
+## Entwicklung
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # Dev-Server (http://localhost:5173/Numa/)
+npm test         # Vitest — komplette Spiellogik ist getestet
+npm run build    # Produktions-Build nach dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Struktur: `src/game/` (pure, getestete Spiellogik), `src/net/` (PeerJS Host/Client + Protokoll), `src/ui/` (React-Komponenten, SVG-Karten). Karten-Galerie zur Sichtprüfung: `/?gallery`.
+
+Die Ziel-Häufigkeiten der Aktionsverteilung sind Platzhalter in [src/game/config.ts](src/game/config.ts) (`ACTION_FREQUENCIES`) — dort die echten Balance-Werte eintragen, Summe muss 108 bleiben.
+
+## Deployment
+
+Jeder Push auf `main` baut und deployed automatisch über GitHub Actions auf GitHub Pages (einmalig in den Repo-Einstellungen unter *Pages* die Quelle „GitHub Actions" wählen).
+
+## Hinweis zur Fairness
+
+Der Host hält technisch bedingt alle Handkarten im Speicher (die UI zeigt sie niemandem). Ein Host mit offenen Entwicklertools könnte sie einsehen — für ein Spiel unter Freunden ein bewusst akzeptierter Trade-off.
