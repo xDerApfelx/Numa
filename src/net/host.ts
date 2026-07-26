@@ -10,6 +10,37 @@ import { makeRoomCode, roomCodeToPeerId } from './roomCode'
 export const HOST_PLAYER_ID = 'host'
 const MAX_PLAYERS = 6
 
+// setTimeout in Hintergrund-Tabs wird von Chrome auf bis zu 1x/Minute
+// gedrosselt — die Bots würden quälend langsam, sobald der Host den Tab
+// wechselt. Timer in einem Dedicated Worker unterliegen dieser Drosselung
+// nicht, deshalb laufen die Bot-Verzögerungen dort.
+type CancelableTimer = (ms: number, fn: () => void) => () => void
+
+function makeWorkerTimer(): CancelableTimer {
+  try {
+    const src = 'onmessage=(e)=>{setTimeout(()=>postMessage(e.data.id), e.data.ms)}'
+    const worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })))
+    let nextId = 1
+    const pending = new Map<number, () => void>()
+    worker.onmessage = (e: MessageEvent<number>) => {
+      const fn = pending.get(e.data)
+      pending.delete(e.data)
+      fn?.()
+    }
+    return (ms, fn) => {
+      const id = nextId++
+      pending.set(id, fn)
+      worker.postMessage({ id, ms })
+      return () => pending.delete(id)
+    }
+  } catch {
+    return (ms, fn) => {
+      const t = setTimeout(fn, ms)
+      return () => clearTimeout(t)
+    }
+  }
+}
+
 // Der Host ist die Autorität: er besitzt die Engine, validiert alle Züge,
 // simuliert die Bots und broadcastet nach jeder Änderung den öffentlichen
 // Zustand plus die jeweils private Hand.
@@ -26,7 +57,8 @@ export class NumaHost {
   private players: LobbyPlayer[]
   private conns = new Map<string, DataConnection>()
   private botRng = mulberry32(Date.now() >>> 0)
-  private botTimer: ReturnType<typeof setTimeout> | null = null
+  private timer: CancelableTimer = makeWorkerTimer()
+  private cancelBotTimer: (() => void) | null = null
   private botCounter = 0
 
   private constructor(hostName: string, code: string, peer: Peer) {
@@ -68,7 +100,7 @@ export class NumaHost {
   }
 
   destroy() {
-    if (this.botTimer) clearTimeout(this.botTimer)
+    this.cancelBotTimer?.()
     this.peer.destroy()
   }
 
@@ -190,23 +222,24 @@ export class NumaHost {
   // Treibt Bots und den automatischen Runden-Abschluss nach der
   // Reveal-Animation an.
   private scheduleBots() {
-    if (this.botTimer) {
-      clearTimeout(this.botTimer)
-      this.botTimer = null
-    }
+    this.cancelBotTimer?.()
+    this.cancelBotTimer = null
     const s = this.state
     if (!s) return
 
     const later = (ms: number, fn: () => void) => {
-      this.botTimer = setTimeout(() => {
-        this.botTimer = null
+      this.cancelBotTimer = this.timer(ms, () => {
+        this.cancelBotTimer = null
         try {
           fn()
-        } catch {
-          // Bot-Zug fehlgeschlagen — Zustand erneut senden und weiter
+        } catch (err) {
+          // Bot-Zug fehlgeschlagen — sichtbar machen, Zustand erneut senden
+          // und die Schleife nicht sterben lassen.
+          console.error('[numa-host] Bot-Zug fehlgeschlagen:', err)
           this.pushState()
+          this.scheduleBots()
         }
-      }, ms)
+      })
     }
 
     if (s.phase === 'playing') {
