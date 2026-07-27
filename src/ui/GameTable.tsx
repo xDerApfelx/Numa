@@ -1,15 +1,70 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ResolutionStep } from '../game/resolve'
-import { isJoker, type AnyCard, type Direction, type HandCard, type JokerCard } from '../game/types'
+import {
+  REVEAL_EFFECT_DELAY_MS,
+  REVEAL_FLIP_MS,
+  REVEAL_STEP_MS,
+} from '../game/config'
+import { visibleSteps, type ResolutionStep } from '../game/resolve'
+import { isJoker, type AnyCard, type Direction, type HandCard } from '../game/types'
 import type { NumaClient } from '../net/client'
 import type { NumaHost } from '../net/host'
 import type { PublicState } from '../net/protocol'
+import { ActionEffect, effectFor } from './ActionEffect'
 import { actionLabel, CardView, jokerLabel, type CardState } from './CardView'
-
-const STEP_MS = 1100
+import { seatPositions } from './tableLayout'
 
 /** Je Sitzplatz: die dort liegende Karte und was sie aktuell zählt. */
 type FaceMap = Record<string, { card: HandCard; state: CardState }>
+
+/** Fortschritt der Aufdeck-Animation. */
+interface RevealProgress {
+  /** Wie viele Karten sind schon umgedreht */
+  flipped: number
+  /** Wie viele Schritte sind angekündigt (Beschriftung sichtbar) */
+  announced: number
+  /** Wie viele Schritte haben sich schon ausgewirkt (Werte geändert) */
+  applied: number
+  done: boolean
+}
+
+const IDLE: RevealProgress = { flipped: 0, announced: 0, applied: 0, done: false }
+
+/**
+ * Spielt das Aufdecken als Zeitplan ab: erst drehen sich die Karten
+ * nacheinander um, dann bekommt jede Aktion erst eine Ankündigung und kurz
+ * darauf ihre Auswirkung. So ist jeder Zug ein eigener Moment.
+ */
+function useRevealProgress(active: boolean, roundKey: number, playerCount: number, stepCount: number) {
+  const [progress, setProgress] = useState<RevealProgress>(IDLE)
+
+  useEffect(() => {
+    if (!active) {
+      setProgress(IDLE)
+      return
+    }
+    setProgress(IDLE)
+
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const at = (ms: number, fn: () => void) => timers.push(setTimeout(fn, ms))
+
+    for (let i = 1; i <= playerCount; i++) {
+      at(i * REVEAL_FLIP_MS, () => setProgress((p) => ({ ...p, flipped: i })))
+    }
+
+    const stepsStart = playerCount * REVEAL_FLIP_MS
+    for (let k = 0; k < stepCount; k++) {
+      at(stepsStart + k * REVEAL_STEP_MS, () => setProgress((p) => ({ ...p, announced: k + 1 })))
+      at(stepsStart + k * REVEAL_STEP_MS + REVEAL_EFFECT_DELAY_MS, () =>
+        setProgress((p) => ({ ...p, applied: k + 1 })),
+      )
+    }
+    at(stepsStart + stepCount * REVEAL_STEP_MS, () => setProgress((p) => ({ ...p, done: true })))
+
+    return () => timers.forEach(clearTimeout)
+  }, [active, roundKey, playerCount, stepCount])
+
+  return progress
+}
 
 export function GameTable({
   pub,
@@ -26,6 +81,7 @@ export function GameTable({
   client: NumaClient | null
   onLeave: () => void
 }) {
+  const playerCount = pub.players.length
   const youSeat = Math.max(0, pub.players.findIndex((p) => p.id === youId))
   const you = pub.players[youSeat]
   const nameOf = (id: string) => pub.players.find((p) => p.id === id)?.name ?? id
@@ -33,17 +89,22 @@ export function GameTable({
   // ---- Zug-Auswahl ----
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [jokerId, setJokerId] = useState<string | null>(null)
+  const [direction, setDirection] = useState<Direction | null>(null)
+  const [jokerDirection, setJokerDirection] = useState<Direction>('self')
   const [blackSelection, setBlackSelection] = useState<Set<string>>(new Set())
 
   const myTurn = pub.phase === 'playing' && pub.players[pub.turnIndex]?.id === youId && !you?.hasPlayed
   const selectedCard = hand.find((c) => c.id === selectedId) ?? null
   const selectedJoker = hand.find((c) => c.id === jokerId) ?? null
   const onlyJokersInHand = hand.length > 0 && hand.every((c) => isJoker(c))
+  const needsJokerDirection = selectedJoker && isJoker(selectedJoker) && selectedJoker.joker === 'shiftAll'
 
   useEffect(() => {
     // Auswahl zurücksetzen, wenn eine neue Runde beginnt oder der Zug raus ist
     setSelectedId(null)
     setJokerId(null)
+    setDirection(null)
+    setJokerDirection('self')
     setBlackSelection(new Set())
   }, [pub.round, pub.phase, you?.hasPlayed])
 
@@ -55,13 +116,13 @@ export function GameTable({
     }
   }
 
-  const playCard = (direction: Direction, jokerDirection: Direction | null) => {
-    if (!selectedCard) return
+  const playCard = () => {
+    if (!selectedCard || !direction) return
     const ev = {
       cardId: selectedCard.id,
       direction,
       jokerId,
-      jokerDirection,
+      jokerDirection: jokerId ? (needsJokerDirection ? jokerDirection : 'self') : null,
     }
     if (host) {
       send(() => host.applyLocal({ type: 'play', playerId: youId, ...ev }))
@@ -79,30 +140,19 @@ export function GameTable({
     }
   }
 
-  // ---- Reveal-Animation: Steps nacheinander abspielen ----
-  const steps = useMemo(
-    () => (pub.resolution?.steps ?? []).filter((s) => !(s.type === 'fizzle' && s.reason === 'passive')),
-    [pub.resolution],
+  // ---- Aufdecken ----
+  const steps = useMemo(() => visibleSteps(pub.resolution?.steps ?? []), [pub.resolution])
+  const revealing = pub.phase === 'reveal'
+  const progress = useRevealProgress(revealing, pub.round, playerCount, steps.length)
+
+  // Karten drehen sich in Sitzreihenfolge ab dem Startspieler um
+  const flipOrder = useMemo(
+    () => Array.from({ length: playerCount }, (_, k) => (pub.startIndex + k) % playerCount),
+    [playerCount, pub.startIndex],
   )
-  const [stepIndex, setStepIndex] = useState(0)
+  const isFaceUp = (seat: number) => revealing && flipOrder.indexOf(seat) < progress.flipped
 
-  useEffect(() => {
-    setStepIndex(0)
-    if (pub.phase !== 'reveal' || steps.length === 0) return
-    const t = setInterval(() => {
-      setStepIndex((i) => {
-        if (i >= steps.length) {
-          clearInterval(t)
-          return i
-        }
-        return i + 1
-      })
-    }, STEP_MS)
-    return () => clearInterval(t)
-  }, [pub.phase, pub.round, steps])
-
-  // Zustand je Sitzplatz nach den ersten `stepIndex` Steps: welche Karte dort
-  // liegt (kann durch "Alle verschieben" wandern) und was sie gerade zählt.
+  // Zustand je Sitzplatz nach den bereits ausgewirkten Schritten
   const faces: FaceMap = useMemo(() => {
     const map: FaceMap = {}
     if (!pub.revealed) return map
@@ -110,7 +160,7 @@ export function GameTable({
     pub.revealed.forEach((p, seat) => {
       map[seatIds[seat]] = { card: p.card, state: { color: p.card.color, value: p.card.value } }
     })
-    for (let k = 0; k < Math.min(stepIndex, steps.length); k++) {
+    for (let k = 0; k < Math.min(progress.applied, steps.length); k++) {
       const s = steps[k]
       if (s.type === 'shiftAll' && s.direction !== 'self') {
         const n = seatIds.length
@@ -128,16 +178,18 @@ export function GameTable({
       }
     }
     return map
-  }, [pub.revealed, pub.players, steps, stepIndex])
+  }, [pub.revealed, pub.players, steps, progress.applied])
 
-  const revealDone = pub.phase === 'reveal' && stepIndex >= steps.length
-  const currentStep = pub.phase === 'reveal' && stepIndex > 0 ? steps[stepIndex - 1] : null
+  const currentStep = revealing && progress.announced > 0 ? steps[progress.announced - 1] : null
+  // Der Effekt läuft, sobald sich der angekündigte Schritt ausgewirkt hat
+  const activeEffect =
+    currentStep && progress.applied === progress.announced ? effectFor(currentStep) : null
 
   const caption = (s: ResolutionStep | null): string => {
-    if (!s) return 'Aufdecken …'
+    if (!s) return progress.flipped < playerCount ? 'Aufdecken …' : 'Und jetzt der Reihe nach …'
     switch (s.type) {
       case 'jokerReveal':
-        return `${nameOf(s.playerId)}: Joker „${jokerLabel(s.joker)}" ${s.active ? 'ist aktiv!' : 'verfällt'}`
+        return `${nameOf(s.playerId)}: Joker „${jokerLabel(s.joker)}“ ${s.active ? 'ist aktiv!' : 'verfällt'}`
       case 'shiftAll':
         return `Alle Karten wandern nach ${s.direction === 'left' ? 'links' : 'rechts'}`
       case 'ruleSwap':
@@ -147,7 +199,7 @@ export function GameTable({
           ? `${nameOf(s.actorId)}: ${actionLabel(s.action)}`
           : `${nameOf(s.actorId)}: ${actionLabel(s.action)} → ${nameOf(s.targetId)}`
       case 'blocked':
-        return `${nameOf(s.shieldOwnerId)} blockt die Aktion von ${nameOf(s.actorId)}`
+        return `${nameOf(s.shieldOwnerId)} wehrt die Aktion von ${nameOf(s.actorId)} ab`
       case 'reflected':
         return `${nameOf(s.mirrorOwnerId)} spiegelt die Aktion zurück auf ${nameOf(s.actorId)}`
       case 'fizzle':
@@ -157,8 +209,8 @@ export function GameTable({
     }
   }
 
-  // Anzeige-Regel: während des Reveals die Regel, gegen die gewertet wird
-  const shownRule = pub.phase === 'reveal' && pub.resolution ? pub.resolution.finalRule : pub.rule
+  // Anzeige-Regel: während des Aufdeckens die Regel, gegen die gewertet wird
+  const shownRule = revealing && pub.resolution ? pub.resolution.finalRule : pub.rule
 
   const highlightIds = new Set<string>()
   if (currentStep) {
@@ -167,53 +219,13 @@ export function GameTable({
     if ('playerId' in currentStep) highlightIds.add(currentStep.playerId)
   }
 
-  // Gegner in Sitzreihenfolge ab deinem linken Nachbarn
-  const opponents = pub.players
-    .map((_, i) => pub.players[(youSeat + 1 + i) % pub.players.length])
-    .slice(0, pub.players.length - 1)
-
   const seatColor = (id: string) => {
     // Sitzfarben aus der Numa-Palette (Logo-Farben plus das Joker-Violett)
     const palette = ['#ec3959', '#008295', '#24b457', '#f9ab2c', '#9867ab', '#a49fab']
     return palette[pub.players.findIndex((p) => p.id === id) % palette.length]
   }
 
-  const renderPlayed = (playerId: string) => {
-    const seat = pub.players.findIndex((p) => p.id === playerId)
-    const player = pub.players[seat]
-    if (pub.revealed) {
-      const entry = faces[playerId]
-      const playedJoker = pub.revealed[seat]?.joker
-      return (
-        <div className={`played-slot ${highlightIds.has(playerId) ? 'highlight' : ''}`}>
-          {entry && <CardView width={86} card={entry.card} state={entry.state} />}
-          {playedJoker && <CardView width={50} card={playedJoker.card} />}
-        </div>
-      )
-    }
-    if (player?.playedBack) {
-      return (
-        <div className="played-slot">
-          <CardView width={86} back arrow={player.playedBack.direction} />
-          {player.playedBack.jokerDirection !== null && <CardView width={50} back arrow={player.playedBack.jokerDirection} />}
-        </div>
-      )
-    }
-    return <div className="played-slot empty" />
-  }
-
-  const winnerBanner = () => {
-    if (!revealDone) return null
-    if (pub.lastWinnerId) {
-      return (
-        <div className="round-banner win">
-          {nameOf(pub.lastWinnerId)} gewinnt die Runde
-          {pub.lastPoolWin > 0 ? ` und räumt ${pub.lastPoolWin} Pool-Karte${pub.lastPoolWin > 1 ? 'n' : ''} ab!` : '!'}
-        </div>
-      )
-    }
-    return <div className="round-banner tie">Unentschieden — die Regelkarte wandert in den Pool</div>
-  }
+  const positions = useMemo(() => seatPositions(playerCount, youSeat), [playerCount, youSeat])
 
   // ---- Spielende ----
   if (pub.phase === 'gameOver') {
@@ -247,6 +259,51 @@ export function GameTable({
     )
   }
 
+  const stagedCards = [selectedCard, selectedJoker].filter(Boolean) as AnyCard[]
+
+  const renderSeatCard = (seat: number) => {
+    const player = pub.players[seat]
+    const isYou = player.id === youId
+
+    // Eigene Auswahl liegt schon auf dem Tisch, bevor sie abgeschickt wird
+    if (isYou && myTurn && stagedCards.length > 0) {
+      return (
+        <div className="seat-cards staged">
+          {stagedCards.map((c) => (
+            <CardView key={c.id} card={c} width={78} />
+          ))}
+        </div>
+      )
+    }
+
+    if (pub.revealed && isFaceUp(seat)) {
+      const entry = faces[player.id]
+      const playedJoker = pub.revealed[seat]?.joker
+      return (
+        <div className="seat-cards">
+          {entry && <CardView width={78} card={entry.card} state={entry.state} />}
+          {playedJoker && <CardView width={52} card={playedJoker.card} />}
+        </div>
+      )
+    }
+
+    if (player.playedBack) {
+      return (
+        <div className="seat-cards">
+          <CardView width={78} back arrow={player.playedBack.direction} />
+          {player.playedBack.jokerDirection !== null && (
+            <CardView width={52} back arrow={player.playedBack.jokerDirection} />
+          )}
+        </div>
+      )
+    }
+    return (
+      <div className="seat-cards">
+        <CardView width={78} />
+      </div>
+    )
+  }
+
   return (
     <main className="table-screen">
       <header className="table-header">
@@ -260,110 +317,179 @@ export function GameTable({
         </button>
       </header>
 
-      <div className="table-middle">
-        <section className="opponents">
-          {opponents.map((p) => {
-          const seat = pub.players.findIndex((q) => q.id === p.id)
-          const isTurn = pub.phase === 'playing' && seat === pub.turnIndex
+      <div className="table-arena">
+        {positions.map((pos) => {
+          const player = pub.players[pos.seat]
+          const isYou = player.id === youId
+          const isTurn = pub.phase === 'playing' && pos.seat === pub.turnIndex
+          const effect = activeEffect?.playerId === player.id ? activeEffect : null
           return (
-            <div key={p.id} className={`opponent ${isTurn ? 'turn' : ''}`}>
-              {renderPlayed(p.id)}
-              <div className="opponent-info">
-                <svg width="18" height="22" viewBox="0 0 20 24" aria-hidden="true">
-                  <path d="M10 1 L17 20 Q10 25 3 20 Z" fill={seatColor(p.id)} />
-                </svg>
-                <span className="player-name">{p.name}</span>
-                <span className="score-chip">{p.score}</span>
-                <span className="hand-chip">{p.handCount} 🂠</span>
+            <div
+              key={player.id}
+              className={[
+                'seat',
+                isYou && 'seat-you',
+                isTurn && 'turn',
+                highlightIds.has(player.id) && 'highlight',
+                pos.opposite && 'opposite',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              style={{ left: `${pos.xPct}%`, top: `${pos.yPct}%` }}
+            >
+              <div className="seat-stack">
+                {renderSeatCard(pos.seat)}
+                {effect && <ActionEffect effect={effect} />}
+                {isYou && myTurn && selectedCard && (
+                  <div className="seat-controls">
+                    <div className="direction-row">
+                      {(
+                        [
+                          ['left', '◀ Links'],
+                          ['self', 'Auf mich'],
+                          ['right', 'Rechts ▶'],
+                        ] as [Direction, string][]
+                      ).map(([dir, label]) => (
+                        <button
+                          key={dir}
+                          className={`btn btn-small ${direction === dir ? 'toggle on' : ''}`}
+                          onClick={() => setDirection(dir)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {needsJokerDirection && (
+                      <div className="direction-row">
+                        <span className="joker-note">Joker richtet sich auf</span>
+                        <button
+                          className={`btn btn-small ${jokerDirection === 'left' ? 'toggle on' : ''}`}
+                          onClick={() => setJokerDirection('left')}
+                        >
+                          ◀ Links
+                        </button>
+                        <button
+                          className={`btn btn-small ${jokerDirection === 'right' ? 'toggle on' : ''}`}
+                          onClick={() => setJokerDirection('right')}
+                        >
+                          Rechts ▶
+                        </button>
+                      </div>
+                    )}
+                    <button className="btn btn-primary btn-small" disabled={!direction} onClick={playCard}>
+                      Karte legen
+                    </button>
+                  </div>
+                )}
               </div>
-              {isTurn && <TurnArrow />}
+
+              <div className="seat-info">
+                <svg width="16" height="20" viewBox="0 0 20 24" aria-hidden="true">
+                  <path d="M10 1 L17 20 Q10 25 3 20 Z" fill={seatColor(player.id)} />
+                </svg>
+                <span className="player-name">
+                  {player.name}
+                  {isYou && <span className="you-tag"> (du)</span>}
+                </span>
+                <span className="score-chip">{player.score}</span>
+                {isTurn && <TurnDot />}
+              </div>
             </div>
           )
         })}
-      </section>
 
-      <section className="table-center">
-        <div className="rule-area">
-          <div className="rule-current">
-            <span className="field-label">Regelkarte</span>
-            <CardView width={120} ruleCard={shownRule} />
-          </div>
-          <div className="rule-preview">
-            <span className="field-label">Vorschau</span>
-            {pub.preview ? <CardView width={82} ruleCard={pub.preview} dimmed /> : <div className="played-slot empty" />}
-          </div>
-          {pub.poolSize > 0 && (
-            <div className="pool-badge" title="Regelkarten im Pool (Pool Extrem)">
-              Pool: {pub.poolSize}
+        <div className="table-core">
+          <div className="rule-area">
+            <div className="rule-current">
+              <span className="field-label">Regelkarte</span>
+              <CardView width={112} ruleCard={shownRule} />
             </div>
+            <div className="rule-side">
+              <div className="rule-preview">
+                <span className="field-label">Vorschau</span>
+                {pub.preview ? <CardView width={74} ruleCard={pub.preview} dimmed /> : <CardView width={74} />}
+              </div>
+              {pub.poolSize > 0 && (
+                <div className="pool-badge" title="Regelkarten im Pool (Pool Extrem)">
+                  Pool {pub.poolSize}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {revealing && <p className="step-caption">{caption(currentStep)}</p>}
+          {revealing && progress.done && (
+            pub.lastWinnerId ? (
+              <div className="round-banner win">
+                {nameOf(pub.lastWinnerId)} gewinnt die Runde
+                {pub.lastPoolWin > 0
+                  ? ` und räumt ${pub.lastPoolWin} Pool-Karte${pub.lastPoolWin > 1 ? 'n' : ''} ab!`
+                  : '!'}
+              </div>
+            ) : (
+              <div className="round-banner tie">Unentschieden — die Regelkarte wandert in den Pool</div>
+            )
+          )}
+          {pub.phase === 'playing' && (
+            <p className="step-caption dim">
+              {myTurn
+                ? onlyJokersInHand
+                  ? 'Nur Joker auf der Hand — wirf einen ab'
+                  : selectedCard
+                    ? 'Wohin zeigt der Pfeil?'
+                    : 'Du bist dran — wähle eine Karte'
+                : `${nameOf(pub.players[pub.turnIndex]?.id ?? '')} ist dran …`}
+            </p>
           )}
         </div>
-        {pub.phase === 'reveal' && <p className="step-caption">{caption(currentStep)}</p>}
-        {winnerBanner()}
-        {pub.phase === 'playing' && (
-          <p className="step-caption dim">
-            {myTurn
-              ? onlyJokersInHand
-                ? 'Nur Joker auf der Hand — wirf einen ab'
-                : 'Du bist dran — wähle eine Karte'
-              : `${nameOf(pub.players[pub.turnIndex]?.id ?? '')} ist dran …`}
-          </p>
-        )}
-        </section>
       </div>
 
-      <section className="you-area">
-        <div className={`you-info ${myTurn ? 'turn' : ''}`}>
-          {renderPlayed(youId)}
-          <div className="opponent-info">
-            <svg width="18" height="22" viewBox="0 0 20 24" aria-hidden="true">
-              <path d="M10 1 L17 20 Q10 25 3 20 Z" fill={seatColor(youId)} />
-            </svg>
-            <span className="player-name">{you?.name} (du)</span>
-            <span className="score-chip">{you?.score}</span>
-          </div>
-          {myTurn && <TurnArrow />}
-        </div>
-
+      <section className="hand-area">
         <div className="hand">
-          {hand.map((c) =>
-            isJoker(c) ? (
-              <CardView
-                key={c.id}
-                width={96}
-                card={c}
-                selected={jokerId === c.id || selectedId === c.id}
-                dimmed={!myTurn || (!onlyJokersInHand && !selectedCard) || !pub.options.jokersEnabled}
-                onClick={
-                  myTurn
-                    ? () => {
-                        if (onlyJokersInHand) {
-                          setSelectedId(selectedId === c.id ? null : c.id)
-                        } else if (selectedCard) {
-                          setJokerId(jokerId === c.id ? null : c.id)
-                        }
-                      }
-                    : undefined
-                }
-              />
-            ) : (
-              <CardView
-                key={c.id}
-                width={96}
-                card={c}
-                selected={selectedId === c.id}
-                dimmed={!myTurn}
-                onClick={myTurn ? () => setSelectedId(selectedId === c.id ? null : c.id) : undefined}
-              />
-            ),
-          )}
+          {hand
+            .filter((c) => c.id !== selectedId && c.id !== jokerId)
+            .map((c) => {
+              const jokerPickable = myTurn && !onlyJokersInHand && selectedCard && pub.options.jokersEnabled
+              if (isJoker(c)) {
+                return (
+                  <CardView
+                    key={c.id}
+                    width={92}
+                    card={c}
+                    dimmed={!myTurn || (!onlyJokersInHand && !jokerPickable)}
+                    onClick={
+                      myTurn
+                        ? () => {
+                            if (onlyJokersInHand) setSelectedId(c.id)
+                            else if (selectedCard) setJokerId(c.id)
+                          }
+                        : undefined
+                    }
+                  />
+                )
+              }
+              return (
+                <CardView
+                  key={c.id}
+                  width={92}
+                  card={c}
+                  dimmed={!myTurn}
+                  onClick={myTurn ? () => setSelectedId(c.id) : undefined}
+                />
+              )
+            })}
         </div>
-
         {myTurn && selectedCard && (
-          <DirectionPicker
-            jokerSelected={selectedJoker && isJoker(selectedJoker) ? selectedJoker : null}
-            onPlay={playCard}
-          />
+          <button
+            className="btn btn-small hand-undo"
+            onClick={() => {
+              setSelectedId(null)
+              setJokerId(null)
+              setDirection(null)
+            }}
+          >
+            Auswahl zurücknehmen
+          </button>
         )}
       </section>
 
@@ -408,91 +534,7 @@ export function GameTable({
   )
 }
 
-// Das Signatur-Motiv als Zug-Anzeige: der rote Pfeil des Logos
-function TurnArrow() {
-  return (
-    <svg className="turn-arrow" width="16" height="26" viewBox="0 0 20 32" aria-hidden="true">
-      <path d="M10 30 L10 8" stroke="var(--red)" strokeWidth="4" strokeLinecap="round" fill="none" />
-      <polyline
-        points="3,13 10,4 17,13"
-        stroke="var(--red)"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </svg>
-  )
-}
-
-function DirectionPicker({
-  jokerSelected,
-  onPlay,
-}: {
-  jokerSelected: JokerCard | null
-  onPlay: (direction: Direction, jokerDirection: Direction | null) => void
-}) {
-  const [direction, setDirection] = useState<Direction | null>(null)
-  const [jokerDirection, setJokerDirection] = useState<Direction>('self')
-
-  const needsJokerDirection = jokerSelected?.joker === 'shiftAll'
-
-  return (
-    <div className="direction-picker panel">
-      <span className="field-label">Pfeil auf</span>
-      <div className="direction-row">
-        {(
-          [
-            ['left', '◀ Links'],
-            ['self', 'Dich selbst'],
-            ['right', 'Rechts ▶'],
-          ] as [Direction, string][]
-        ).map(([dir, label]) => (
-          <button
-            key={dir}
-            className={`btn btn-small ${direction === dir ? 'toggle on' : ''}`}
-            onClick={() => setDirection(dir)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {jokerSelected && (
-        <>
-          <span className="direction-sep" />
-          <div className="direction-row">
-            <span style={{ color: 'var(--ink-dim)', fontSize: 13 }}>
-              + {jokerLabel(jokerSelected.joker)}
-            </span>
-            {needsJokerDirection && (
-              <>
-                <button
-                  className={`btn btn-small ${jokerDirection === 'left' ? 'toggle on' : ''}`}
-                  onClick={() => setJokerDirection('left')}
-                >
-                  ◀ Joker
-                </button>
-                <button
-                  className={`btn btn-small ${jokerDirection === 'right' ? 'toggle on' : ''}`}
-                  onClick={() => setJokerDirection('right')}
-                >
-                  Joker ▶
-                </button>
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-      <span className="direction-sep" />
-      <button
-        className="btn btn-primary btn-small"
-        disabled={direction === null}
-        onClick={() => direction && onPlay(direction, jokerSelected ? (needsJokerDirection ? jokerDirection : 'self') : null)}
-      >
-        Karte legen
-      </button>
-    </div>
-  )
+/** Der rote Punkt des Logos als Zug-Anzeige */
+function TurnDot() {
+  return <span className="turn-dot" aria-label="ist am Zug" />
 }

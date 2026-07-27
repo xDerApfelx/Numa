@@ -53,6 +53,17 @@ export interface ResolutionResult {
   finalRule: RuleCard // Regel, gegen die der Stich gewertet wird (nach Swaps)
 }
 
+/**
+ * Schritte, die beim Aufdecken einen eigenen Moment bekommen. Schild- und
+ * Spiegelkarten wirken passiv und erzeugen für sich genommen nichts
+ * Sichtbares — sie tauchen erst auf, wenn sie etwas abwehren. Host und
+ * Oberfläche müssen dieselbe Liste verwenden, sonst laufen Animation und
+ * Rundenwechsel auseinander.
+ */
+export function visibleSteps(steps: readonly ResolutionStep[]): ResolutionStep[] {
+  return steps.filter((s) => !(s.type === 'fizzle' && s.reason === 'passive'))
+}
+
 // Sitz-Konvention: linker Nachbar von Seat i = (i+1) % n, rechter = (i-1+n) % n.
 export function neighborSeat(i: number, dir: Direction, n: number): number {
   if (dir === 'self') return i

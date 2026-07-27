@@ -61,7 +61,10 @@ export function createGame(
   const drawPile = buildDrawDeck(rng, options.jokersEnabled)
   const ruleDeck = buildRuleDeck(rng)
 
-  const players: PlayerState[] = playerInfos.map((p) => ({ ...p, hand: [], score: 0 }))
+  // Sitzordnung einmal pro Spiel auslosen — wer neben wem sitzt, soll nicht
+  // von der Beitrittsreihenfolge in der Lobby abhängen. Innerhalb einer Partie
+  // bleibt sie dann fest.
+  const players: PlayerState[] = shuffle(playerInfos, rng).map((p) => ({ ...p, hand: [], score: 0 }))
   for (const p of players) {
     p.hand = drawPile.splice(0, HAND_SIZE)
   }

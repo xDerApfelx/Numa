@@ -39,11 +39,13 @@ describe('Bots', () => {
     const s = createGame(PLAYERS, { targetScore: 3, jokersEnabled: false }, 7)
     const red9: HandCard = { id: 'red9', kind: 'number', color: 'red', value: 9, action: 'shield' }
     const green1: HandCard = { id: 'green1', kind: 'number', color: 'green', value: 1, action: 'shield' }
-    s.players[0].hand = [green1, red9]
+    // Sitzordnung wird ausgelost — Karten dem Spieler geben, nicht dem Platz
+    const bot = s.players[0]
+    bot.hand = [green1, red9]
     const rule: RuleCard = { id: 'r', color: 'red', parity: null, range: 'high', black: false }
     s.ruleDeck = [rule, ...s.ruleDeck]
     s.phase = 'playing'
-    const move = chooseBotMove(s, 'p0', mulberry32(1))
+    const move = chooseBotMove(s, bot.id, mulberry32(1))
     expect(move.cardId).toBe('red9')
   })
 
@@ -64,7 +66,8 @@ describe('Bots', () => {
       value: 5,
       action: 'shield',
     })
-    s.players[0].hand = [
+    const bot = s.players[0]
+    bot.hand = [
       mk('a', 'red'),
       mk('b', 'red'),
       mk('c', 'green'),
@@ -79,7 +82,7 @@ describe('Bots', () => {
       { id: 'r2', color: 'blue', parity: null, range: 'low', black: false },
       ...s.ruleDeck,
     ]
-    const ev = chooseBotBlackDiscard(s, 'p0', mulberry32(1))
+    const ev = chooseBotBlackDiscard(s, bot.id, mulberry32(1))
     // grüne Karten passen weder zu rot (aktuell danach) noch blau (Vorschau danach)
     expect(ev.cardIds.length).toBeLessThanOrEqual(4)
     expect(ev.cardIds).toEqual(['c', 'd', 'e', 'f'])

@@ -9,7 +9,16 @@ const PLAYERS = [
 ]
 
 function newGame(over: { targetScore?: number; jokersEnabled?: boolean } = {}, seed = 1) {
-  return createGame(PLAYERS, { targetScore: over.targetScore ?? 5, jokersEnabled: over.jokersEnabled ?? true }, seed)
+  const s = createGame(
+    PLAYERS,
+    { targetScore: over.targetScore ?? 5, jokersEnabled: over.jokersEnabled ?? true },
+    seed,
+  )
+  // createGame lost die Sitzordnung aus; für die Tests hier auf die bekannte
+  // Reihenfolge zurückdrehen, damit Sitzplatz i immer PLAYERS[i] ist. Das
+  // Auslosen selbst hat einen eigenen Test.
+  s.players = PLAYERS.map((info) => s.players.find((p) => p.id === info.id)!)
+  return s
 }
 
 let nextId = 0
@@ -57,6 +66,32 @@ describe('createGame', () => {
   it('wirft bei falscher Spielerzahl', () => {
     expect(() => createGame(PLAYERS.slice(0, 1), { targetScore: 5, jokersEnabled: true }, 1)).toThrow()
   })
+
+  it('lost die Sitzordnung pro Spiel aus, aber immer vollständig', () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({ id: `s${i}`, name: `S${i}`, isBot: false }))
+    const opts = { targetScore: 5, jokersEnabled: true }
+    const orderOf = (seed: number) =>
+      createGame(six, opts, seed)
+        .players.map((p) => p.id)
+        .join(',')
+
+    // Gleicher Seed -> gleiche Sitzordnung, anderer Seed -> andere
+    expect(orderOf(4)).toEqual(orderOf(4))
+    const seen = new Set([1, 2, 3, 4, 5, 6, 7, 8].map(orderOf))
+    expect(seen.size).toBeGreaterThan(1)
+
+    // Es geht niemand verloren und niemand sitzt doppelt
+    for (const order of seen) {
+      expect(order.split(',').sort()).toEqual(six.map((p) => p.id).sort())
+    }
+  })
+
+  it('behält die ausgeloste Sitzordnung über die Runden bei', () => {
+    const s0 = rigged([[num('red', 9, 'shield')], [num('red', 5, 'shield')], [num('blue', 2, 'shield')]])
+    const before = s0.players.map((p) => p.id)
+    const s2 = applyEvent(playAll(s0), { type: 'nextRound' })
+    expect(s2.players.map((p) => p.id)).toEqual(before)
+  })
 })
 
 describe('Rundenzyklus', () => {
@@ -92,7 +127,7 @@ describe('Rundenzyklus', () => {
     s.ruleDeck = [RED_HIGH, ...s.ruleDeck.filter((r) => !r.black)]
     s.phase = 'playing'
     s = playAll(s)
-    expect(s.lastWinnerId).toBe('p1')
+    expect(s.lastWinnerId).toBe(s.players[1].id)
     expect(s.players[1].score).toBe(2) // 1 Regelkarte + 1 Pool-Karte
     expect(s.lastPoolWin).toBe(1)
     expect(s.pool).toHaveLength(0)

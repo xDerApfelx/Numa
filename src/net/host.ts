@@ -1,8 +1,14 @@
 import Peer, { type DataConnection } from 'peerjs'
 import { chooseBotBlackDiscard, chooseBotMove } from '../game/bots'
 import { applyEvent, createGame, type GameEvent, type GameState } from '../game/engine'
-import { DEFAULT_OPTIONS } from '../game/config'
+import {
+  BOT_THINK_MAX_MS,
+  BOT_THINK_MIN_MS,
+  DEFAULT_OPTIONS,
+  revealDurationMs,
+} from '../game/config'
 import { mulberry32 } from '../game/rng'
+import { visibleSteps } from '../game/resolve'
 import type { AnyCard, GameOptions } from '../game/types'
 import { toPublicState, type C2H, type H2C, type LobbyPlayer, type LobbySnapshot, type PublicState } from './protocol'
 import { makeRoomCode, roomCodeToPeerId } from './roomCode'
@@ -245,16 +251,22 @@ export class NumaHost {
     if (s.phase === 'playing') {
       const current = s.players[s.turnIndex]
       if (current.isBot) {
-        later(700 + this.botRng() * 900, () => this.applyAndBroadcast(chooseBotMove(this.state!, current.id, this.botRng)))
+        const think = BOT_THINK_MIN_MS + this.botRng() * (BOT_THINK_MAX_MS - BOT_THINK_MIN_MS)
+        later(think, () => this.applyAndBroadcast(chooseBotMove(this.state!, current.id, this.botRng)))
       }
     } else if (s.phase === 'reveal') {
-      // Zeit für die Step-Animation lassen, dann automatisch weiter
-      const steps = s.lastResolution?.steps.length ?? 0
-      later(steps * 1300 + 4000, () => this.applyAndBroadcast({ type: 'nextRound' }))
+      // Erst weiter, wenn die Aufdeck-Animation der Spieler durch ist —
+      // dieselbe Rechnung nutzt die Oberfläche für ihren Ablauf.
+      const steps = visibleSteps(s.lastResolution?.steps ?? []).length
+      later(revealDurationMs(s.players.length, steps), () =>
+        this.applyAndBroadcast({ type: 'nextRound' }),
+      )
     } else if (s.phase === 'blackRule') {
       const idx = s.players.findIndex((p, i) => p.isBot && !s.blackDone[i])
       if (idx >= 0) {
-        later(900, () => this.applyAndBroadcast(chooseBotBlackDiscard(this.state!, this.state!.players[idx].id, this.botRng)))
+        later(1100, () =>
+          this.applyAndBroadcast(chooseBotBlackDiscard(this.state!, this.state!.players[idx].id, this.botRng)),
+        )
       }
     }
   }

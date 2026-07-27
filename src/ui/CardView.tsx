@@ -122,15 +122,20 @@ export function CardView({
   } else {
     return (
       <span
-        className="card card-empty"
+        className="card-slot"
         style={{ '--card-w-default': `${width}px` } as React.CSSProperties}
         aria-hidden="true"
-      />
+      >
+        <span className="card card-empty" />
+      </span>
     )
   }
 
-  // Der Pfeil auf der Rückseite zeigt im Original nach oben.
+  // Der Pfeil auf der Rückseite zeigt im Original nach oben. Gedreht wird die
+  // ganze Karte — quer liegende Karten brauchen deshalb einen entsprechend
+  // breiteren Platz, sonst würde die Karte am Rand beschnitten.
   const rotation = arrow === 'left' ? -90 : arrow === 'right' ? 90 : arrow === 'self' ? 180 : 0
+  const quarterTurn = rotation === 90 || rotation === -90
 
   // Overlay nur, wenn die Karte gerade wirklich etwas anderes zählt als aufgedruckt.
   const printed = card && card.kind !== 'joker' ? card : null
@@ -141,44 +146,43 @@ export function CardView({
   const Tag = onClick ? 'button' : 'div'
 
   return (
-    <Tag
-      className={[
-        'card',
-        selected && 'card-selected',
-        dimmed && 'card-dimmed',
-        onClick && 'card-clickable',
-        modified && 'card-modified',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+    <span
+      className={`card-slot${quarterTurn ? ' quarter' : ''}`}
       style={
         {
           // Breite als Variable, damit die Stylesheets sie auf flachen
           // Viewports herunterskalieren können; die Höhe folgt dem
           // Seitenverhältnis der echten Karte (66 x 96 mm).
           '--card-w-default': `${width}px`,
+          '--card-rot': `${rotation}deg`,
           '--card-state-color':
             state?.color != null ? COLOR_HEX[state.color] : modified ? 'var(--ink-dim)' : 'transparent',
         } as React.CSSProperties
       }
-      onClick={onClick}
-      title={label ?? title}
-      type={onClick ? 'button' : undefined}
-      aria-label={label ?? title}
     >
-      <img
-        className="card-art"
-        src={src}
-        alt=""
-        draggable={false}
-        style={rotation ? { transform: `rotate(${rotation}deg)` } : undefined}
-      />
-      {modified && (
-        <span className="card-state" aria-hidden="true">
-          {changedValue && <span className="card-state-value">{state!.value ?? '?'}</span>}
-          {changedColor && !changedValue && <span className="card-state-dot" />}
-        </span>
-      )}
-    </Tag>
+      <Tag
+        className={[
+          'card',
+          selected && 'card-selected',
+          dimmed && 'card-dimmed',
+          onClick && 'card-clickable',
+          modified && 'card-modified',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={onClick}
+        title={label ?? title}
+        type={onClick ? 'button' : undefined}
+        aria-label={label ?? title}
+      >
+        <img className="card-art" src={src} alt="" draggable={false} />
+        {modified && (
+          <span className="card-state" aria-hidden="true">
+            {changedValue && <span className="card-state-value">{state!.value ?? '?'}</span>}
+            {changedColor && !changedValue && <span className="card-state-dot" />}
+          </span>
+        )}
+      </Tag>
+    </span>
   )
 }
