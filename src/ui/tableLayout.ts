@@ -25,10 +25,52 @@ export interface EllipseOptions {
   ry?: number
 }
 
+/**
+ * Drehwinkel für eine abgelegte Karte, damit ihr Pfeil genau auf den
+ * Zielplatz zeigt. Der Pfeil zeigt auf einer ungedrehten Karte nach oben.
+ *
+ * Die Sitzpositionen sind Prozentwerte, die Arena ist aber breiter als hoch —
+ * für den optischen Winkel müssen sie deshalb erst in Pixel umgerechnet
+ * werden, sonst zeigt die Karte daneben.
+ */
+export function pointingAngle(
+  from: { xPct: number; yPct: number },
+  to: { xPct: number; yPct: number },
+  arenaWidth: number,
+  arenaHeight: number,
+): number {
+  const dx = ((to.xPct - from.xPct) / 100) * arenaWidth
+  const dy = ((to.yPct - from.yPct) / 100) * arenaHeight
+  if (dx === 0 && dy === 0) return 0
+  return (Math.atan2(dy, dx) * 180) / Math.PI + 90
+}
+
+/**
+ * Zeigt die Karte auf den Ablegenden selbst, dreht sie also vom Tischmittel-
+ * punkt weg nach außen.
+ */
+export function outwardAngle(
+  pos: { xPct: number; yPct: number },
+  arenaWidth: number,
+  arenaHeight: number,
+): number {
+  return pointingAngle({ xPct: 50, yPct: 50 }, pos, arenaWidth, arenaHeight)
+}
+
+/** Platzbedarf einer gedrehten Karte — sonst würde sie am Rand beschnitten. */
+export function rotatedBounds(width: number, height: number, angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180
+  const c = Math.abs(Math.cos(rad))
+  const s = Math.abs(Math.sin(rad))
+  return { width: width * c + height * s, height: width * s + height * c }
+}
+
+// Die Plätze liegen auf dem Rand des Sitzfelds; dass die Karten nicht über
+// die Spielfläche hinausragen, regelt die Einrückung des Felds im Stylesheet.
 export function seatPositions(
   count: number,
   youSeat: number,
-  { rx = 40, ry = 37 }: EllipseOptions = {},
+  { rx = 48, ry = 48 }: EllipseOptions = {},
 ): SeatPosition[] {
   const out: SeatPosition[] = []
   for (let seat = 0; seat < count; seat++) {

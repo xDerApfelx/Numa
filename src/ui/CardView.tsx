@@ -1,5 +1,6 @@
 import { cardArtPath, ruleArtPath } from '../game/cards'
 import type { ActionKind, AnyCard, Color, Direction, JokerKind, RuleCard } from '../game/types'
+import { rotatedBounds } from './tableLayout'
 
 // Die Karten sind die echten Druckvorlagen aus PDF/, per tools/extract-cards.mjs
 // als Vektor-SVG nach public/cards/ extrahiert. Die Grafik zeigt immer die
@@ -87,6 +88,7 @@ export function CardView({
   state,
   back,
   arrow,
+  angleDeg,
   width = 110,
   selected = false,
   dimmed = false,
@@ -99,9 +101,12 @@ export function CardView({
   ruleCard?: RuleCard
   /** Ist-Zustand nach Aktionen — weicht er von der Karte ab, wird er eingeblendet */
   state?: CardState | null
-  /** Rückseite mit Richtungspfeil zeigen */
+  /** Rückseite zeigen */
   back?: boolean
+  /** Grobe Richtung in 90-Grad-Schritten (für Galerie und Vorschauen) */
   arrow?: Direction | null
+  /** Genauer Drehwinkel in Grad — zeigt exakt auf den Zielplatz, schlägt `arrow` */
+  angleDeg?: number | null
   width?: number
   selected?: boolean
   dimmed?: boolean
@@ -132,10 +137,11 @@ export function CardView({
   }
 
   // Der Pfeil auf der Rückseite zeigt im Original nach oben. Gedreht wird die
-  // ganze Karte — quer liegende Karten brauchen deshalb einen entsprechend
-  // breiteren Platz, sonst würde die Karte am Rand beschnitten.
-  const rotation = arrow === 'left' ? -90 : arrow === 'right' ? 90 : arrow === 'self' ? 180 : 0
-  const quarterTurn = rotation === 90 || rotation === -90
+  // ganze Karte, damit sie wirklich auf den Zielplatz zeigt — dafür muss der
+  // belegte Platz mitwachsen, sonst würde die Karte am Rand beschnitten.
+  const rotation =
+    angleDeg ?? (arrow === 'left' ? -90 : arrow === 'right' ? 90 : arrow === 'self' ? 180 : 0)
+  const bounds = rotation ? rotatedBounds(66, 96, rotation) : null
 
   // Overlay nur, wenn die Karte gerade wirklich etwas anderes zählt als aufgedruckt.
   const printed = card && card.kind !== 'joker' ? card : null
@@ -147,7 +153,7 @@ export function CardView({
 
   return (
     <span
-      className={`card-slot${quarterTurn ? ' quarter' : ''}`}
+      className="card-slot"
       style={
         {
           // Breite als Variable, damit die Stylesheets sie auf flachen
@@ -155,6 +161,9 @@ export function CardView({
           // Seitenverhältnis der echten Karte (66 x 96 mm).
           '--card-w-default': `${width}px`,
           '--card-rot': `${rotation}deg`,
+          // Platzbedarf der gedrehten Karte, als Vielfaches der Kartenbreite
+          '--slot-fw': bounds ? bounds.width / 66 : 1,
+          '--slot-fh': bounds ? bounds.height / 66 : 96 / 66,
           '--card-state-color':
             state?.color != null ? COLOR_HEX[state.color] : modified ? 'var(--ink-dim)' : 'transparent',
         } as React.CSSProperties

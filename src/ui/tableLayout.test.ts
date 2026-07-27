@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { seatPositions } from './tableLayout'
+import { outwardAngle, pointingAngle, rotatedBounds, seatPositions } from './tableLayout'
 
 const at = (positions: ReturnType<typeof seatPositions>, seat: number) =>
   positions.find((p) => p.seat === seat)!
@@ -58,12 +58,61 @@ describe('seatPositions', () => {
     }
   })
 
-  it('hält die Mitte für Regelkarten frei', () => {
+  it('lässt die Karte exakt auf den Nachbarn zeigen, nicht nur in 90-Grad-Schritten', () => {
+    const count = 6
+    const you = 0
+    const pos = seatPositions(count, you)
+    const me = at(pos, you)
+    const left = at(pos, 1)
+    const angle = pointingAngle(me, left, 1400, 700)
+    // schräg nach oben links: zwischen -90 (glatt links) und 0 (glatt hoch)
+    expect(angle).toBeGreaterThan(-90)
+    expect(angle).toBeLessThan(0)
+    // und eben kein glatter 90-Grad-Wert
+    expect(Math.abs(angle % 90)).toBeGreaterThan(1)
+  })
+
+  it('zeigt bei zwei Spielern genau geradeaus zum Gegenüber', () => {
+    const pos = seatPositions(2, 0)
+    expect(pointingAngle(at(pos, 0), at(pos, 1), 1000, 600)).toBeCloseTo(0, 5)
+    expect(pointingAngle(at(pos, 1), at(pos, 0), 1000, 600)).toBeCloseTo(180, 5)
+  })
+
+  it('dreht "auf mich selbst" nach außen vom Tisch weg', () => {
+    const pos = seatPositions(4, 0)
+    // Du sitzt unten: der Pfeil zeigt nach unten, also aus dem Tisch heraus
+    expect(outwardAngle(at(pos, 0), 1000, 600)).toBeCloseTo(180, 5)
+    // Der Gegenüber sitzt oben: sein Pfeil zeigt nach oben
+    expect(outwardAngle(at(pos, 2), 1000, 600)).toBeCloseTo(0, 5)
+  })
+
+  it('berücksichtigt das Seitenverhältnis der Arena', () => {
+    const from = { xPct: 50, yPct: 50 }
+    const to = { xPct: 100, yPct: 0 }
+    // Bei gleichem Prozent-Versatz hängt der optische Winkel von der Fläche ab
+    const breit = pointingAngle(from, to, 2000, 500)
+    const hoch = pointingAngle(from, to, 500, 2000)
+    expect(breit).not.toBeCloseTo(hoch, 1)
+    expect(breit).toBeGreaterThan(hoch)
+  })
+
+  it('rechnet den Platzbedarf gedrehter Karten aus', () => {
+    expect(rotatedBounds(66, 96, 0)).toEqual({ width: 66, height: 96 })
+    const quer = rotatedBounds(66, 96, 90)
+    expect(quer.width).toBeCloseTo(96, 5)
+    expect(quer.height).toBeCloseTo(66, 5)
+    // Schräg braucht mehr Platz als beide Seitenlängen
+    const schraeg = rotatedBounds(66, 96, 45)
+    expect(schraeg.width).toBeGreaterThan(96)
+    expect(schraeg.height).toBeGreaterThan(96)
+  })
+
+  it('setzt alle Plätze auf den Rand und hält die Mitte für Regelkarten frei', () => {
     for (const count of [2, 3, 4, 5, 6]) {
-      for (const p of seatPositions(count, 0)) {
-        const dx = (p.xPct - 50) / 40
-        const dy = (p.yPct - 50) / 37
-        expect(Math.hypot(dx, dy)).toBeCloseTo(1, 5) // sitzt auf dem Rand
+      for (const p of seatPositions(count, 0, { rx: 48, ry: 48 })) {
+        const dx = (p.xPct - 50) / 48
+        const dy = (p.yPct - 50) / 48
+        expect(Math.hypot(dx, dy)).toBeCloseTo(1, 5)
       }
     }
   })

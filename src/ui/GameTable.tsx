@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   REVEAL_EFFECT_DELAY_MS,
   REVEAL_FLIP_MS,
@@ -11,7 +11,8 @@ import type { NumaHost } from '../net/host'
 import type { PublicState } from '../net/protocol'
 import { ActionEffect, effectFor } from './ActionEffect'
 import { actionLabel, CardView, jokerLabel, type CardState } from './CardView'
-import { seatPositions } from './tableLayout'
+import { outwardAngle, pointingAngle, seatPositions } from './tableLayout'
+import { useElementSize } from './useElementSize'
 
 /** Je Sitzplatz: die dort liegende Karte und was sie aktuell zählt. */
 type FaceMap = Record<string, { card: HandCard; state: CardState }>
@@ -227,6 +228,51 @@ export function GameTable({
 
   const positions = useMemo(() => seatPositions(playerCount, youSeat), [playerCount, youSeat])
 
+  // Echte Pixelmaße der Spielfläche — nur damit zeigen die Karten wirklich auf
+  // den Nachbarn statt bloß grob nach links oder rechts.
+  const arenaRef = useRef<HTMLDivElement>(null)
+  const arena = useElementSize(arenaRef)
+
+  /** Winkel, in dem die Karte von `seat` aus in `direction` zeigen muss. */
+  const cardAngle = (seat: number, direction: Direction): number => {
+    if (!arena.width || !arena.height) return 0
+    const from = positions[seat]
+    if (!from) return 0
+    if (direction === 'self') return outwardAngle(from, arena.width, arena.height)
+    const targetSeat =
+      direction === 'left' ? (seat + 1) % playerCount : (seat - 1 + playerCount) % playerCount
+    return pointingAngle(from, positions[targetSeat], arena.width, arena.height)
+  }
+
+  /** Mittelpunkt eines Sitzplatzes in Pixeln, für die Verbindungslinie. */
+  const seatPoint = (playerId: string) => {
+    const seat = pub.players.findIndex((p) => p.id === playerId)
+    const pos = positions[seat]
+    if (!pos) return null
+    return { x: (pos.xPct / 100) * arena.width, y: (pos.yPct / 100) * arena.height }
+  }
+
+  // Beim Aufdecken den Blick führen: Verbindung vom Handelnden zur Zielkarte
+  const connector = (() => {
+    if (!currentStep || !arena.width) return null
+    let fromId: string | null = null
+    let toId: string | null = null
+    if (currentStep.type === 'action' && currentStep.actorId !== currentStep.targetId) {
+      fromId = currentStep.actorId
+      toId = currentStep.targetId
+    } else if (currentStep.type === 'blocked') {
+      fromId = currentStep.actorId
+      toId = currentStep.shieldOwnerId
+    } else if (currentStep.type === 'reflected') {
+      fromId = currentStep.mirrorOwnerId
+      toId = currentStep.actorId
+    }
+    if (!fromId || !toId) return null
+    const a = seatPoint(fromId)
+    const b = seatPoint(toId)
+    return a && b ? { a, b } : null
+  })()
+
   // ---- Spielende ----
   if (pub.phase === 'gameOver') {
     const ranking = [...pub.players].sort((a, b) => b.score - a.score)
@@ -265,24 +311,49 @@ export function GameTable({
     const player = pub.players[seat]
     const isYou = player.id === youId
 
-    // Eigene Auswahl liegt schon auf dem Tisch, bevor sie abgeschickt wird
+    // Eigene Auswahl liegt schon auf dem Tisch, bevor sie abgeschickt wird —
+    // sobald eine Richtung gewählt ist, dreht sie sich schon mal dorthin.
     if (isYou && myTurn && stagedCards.length > 0) {
       return (
         <div className="seat-cards staged">
-          {stagedCards.map((c) => (
-            <CardView key={c.id} card={c} width={78} />
+          {stagedCards.map((c, i) => (
+            <CardView
+              key={c.id}
+              card={c}
+              width={110}
+              angleDeg={
+                i === 0
+                  ? direction
+                    ? cardAngle(seat, direction)
+                    : 0
+                  : needsJokerDirection
+                    ? cardAngle(seat, jokerDirection)
+                    : 0
+              }
+            />
           ))}
         </div>
       )
     }
 
+    // Auch nach dem Aufdecken bleibt die Karte in ihre Richtung gedreht —
+    // sonst wäre nicht mehr erkennbar, auf wen sie gezeigt hat.
     if (pub.revealed && isFaceUp(seat)) {
       const entry = faces[player.id]
-      const playedJoker = pub.revealed[seat]?.joker
+      const played = pub.revealed[seat]
       return (
         <div className="seat-cards">
-          {entry && <CardView width={78} card={entry.card} state={entry.state} />}
-          {playedJoker && <CardView width={52} card={playedJoker.card} />}
+          {entry && (
+            <CardView
+              width={110}
+              card={entry.card}
+              state={entry.state}
+              angleDeg={played ? cardAngle(seat, played.direction) : 0}
+            />
+          )}
+          {played?.joker && (
+            <CardView width={72} card={played.joker.card} angleDeg={cardAngle(seat, played.joker.direction)} />
+          )}
         </div>
       )
     }
@@ -290,16 +361,16 @@ export function GameTable({
     if (player.playedBack) {
       return (
         <div className="seat-cards">
-          <CardView width={78} back arrow={player.playedBack.direction} />
+          <CardView width={110} back angleDeg={cardAngle(seat, player.playedBack.direction)} />
           {player.playedBack.jokerDirection !== null && (
-            <CardView width={52} back arrow={player.playedBack.jokerDirection} />
+            <CardView width={72} back angleDeg={cardAngle(seat, player.playedBack.jokerDirection)} />
           )}
         </div>
       )
     }
     return (
       <div className="seat-cards">
-        <CardView width={78} />
+        <CardView width={110} />
       </div>
     )
   }
@@ -317,12 +388,35 @@ export function GameTable({
         </button>
       </header>
 
-      <div className="table-arena">
+      <div className={`table-arena seats-${playerCount}`}>
+        {/* Die Sitze liegen in einem eingerückten Feld, damit die Karten am
+            oberen und unteren Rand vollständig Platz haben. */}
+        <div className="seat-field" ref={arenaRef}>
+        {/* Führt den Blick beim Aufdecken vom Handelnden zur betroffenen Karte */}
+        {connector && (
+          <svg className="table-connector" viewBox={`0 0 ${arena.width} ${arena.height}`} aria-hidden="true">
+            <defs>
+              <marker id="conn-tip" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+                <path d="M0 0 L9 4.5 L0 9 Z" fill="var(--accent)" />
+              </marker>
+            </defs>
+            <line
+              x1={connector.a.x}
+              y1={connector.a.y}
+              x2={connector.b.x}
+              y2={connector.b.y}
+              markerEnd="url(#conn-tip)"
+            />
+          </svg>
+        )}
+
         {positions.map((pos) => {
           const player = pub.players[pos.seat]
           const isYou = player.id === youId
           const isTurn = pub.phase === 'playing' && pos.seat === pub.turnIndex
           const effect = activeEffect?.playerId === player.id ? activeEffect : null
+          // Während eines Aufdeck-Schritts treten Unbeteiligte zurück
+          const faded = revealing && currentStep !== null && !highlightIds.has(player.id)
           return (
             <div
               key={player.id}
@@ -331,6 +425,7 @@ export function GameTable({
                 isYou && 'seat-you',
                 isTurn && 'turn',
                 highlightIds.has(player.id) && 'highlight',
+                faded && 'faded',
                 pos.opposite && 'opposite',
               ]
                 .filter(Boolean)
@@ -338,49 +433,57 @@ export function GameTable({
               style={{ left: `${pos.xPct}%`, top: `${pos.yPct}%` }}
             >
               <div className="seat-stack">
-                {renderSeatCard(pos.seat)}
-                {effect && <ActionEffect effect={effect} />}
-                {isYou && myTurn && selectedCard && (
-                  <div className="seat-controls">
-                    <div className="direction-row">
-                      {(
-                        [
-                          ['left', '◀ Links'],
-                          ['self', 'Auf mich'],
-                          ['right', 'Rechts ▶'],
-                        ] as [Direction, string][]
-                      ).map(([dir, label]) => (
-                        <button
-                          key={dir}
-                          className={`btn btn-small ${direction === dir ? 'toggle on' : ''}`}
-                          onClick={() => setDirection(dir)}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                {isYou && myTurn && selectedCard ? (
+                  // Karte bleibt in der Mitte, die Richtungen liegen drumherum
+                  <div className="picker">
+                    <button
+                      className={`btn btn-primary btn-small pick-confirm ${!direction ? 'is-off' : ''}`}
+                      disabled={!direction}
+                      onClick={playCard}
+                    >
+                      Karte legen
+                    </button>
+                    <button
+                      className={`btn btn-small pick-left ${direction === 'left' ? 'toggle on' : ''}`}
+                      onClick={() => setDirection('left')}
+                    >
+                      ◀ Links
+                    </button>
+                    <div className="pick-card">{renderSeatCard(pos.seat)}</div>
+                    <button
+                      className={`btn btn-small pick-right ${direction === 'right' ? 'toggle on' : ''}`}
+                      onClick={() => setDirection('right')}
+                    >
+                      Rechts ▶
+                    </button>
+                    <button
+                      className={`btn btn-small pick-self ${direction === 'self' ? 'toggle on' : ''}`}
+                      onClick={() => setDirection('self')}
+                    >
+                      Auf mich ▼
+                    </button>
                     {needsJokerDirection && (
-                      <div className="direction-row">
-                        <span className="joker-note">Joker richtet sich auf</span>
+                      <div className="pick-joker">
+                        <span className="joker-note">Joker:</span>
                         <button
                           className={`btn btn-small ${jokerDirection === 'left' ? 'toggle on' : ''}`}
                           onClick={() => setJokerDirection('left')}
                         >
-                          ◀ Links
+                          ◀
                         </button>
                         <button
                           className={`btn btn-small ${jokerDirection === 'right' ? 'toggle on' : ''}`}
                           onClick={() => setJokerDirection('right')}
                         >
-                          Rechts ▶
+                          ▶
                         </button>
                       </div>
                     )}
-                    <button className="btn btn-primary btn-small" disabled={!direction} onClick={playCard}>
-                      Karte legen
-                    </button>
                   </div>
+                ) : (
+                  renderSeatCard(pos.seat)
                 )}
+                {effect && <ActionEffect effect={effect} />}
               </div>
 
               <div className="seat-info">
@@ -397,6 +500,7 @@ export function GameTable({
             </div>
           )
         })}
+        </div>
 
         <div className="table-core">
           <div className="rule-area">

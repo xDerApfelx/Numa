@@ -183,7 +183,9 @@ button:focus-visible {
 
 /* Kopfzeile, Arena und Hand teilen sich die Fensterhöhe — gescrollt wird nie. */
 .table-screen {
-  --slot-card: clamp(42px, 7.2vh, 78px);
+  /* Karten müssen groß genug sein, dass man die Aktion darauf lesen kann.
+     Bei mehr Mitspielern wird der Kreis enger, also etwas kleiner. */
+  --slot-card: clamp(64px, 11vh, 124px);
   height: 100dvh;
   overflow: hidden;
   display: flex;
@@ -225,6 +227,47 @@ button:focus-visible {
   width: 100%;
 }
 
+.table-arena.seats-5 {
+  --slot-card: clamp(56px, 9.5vh, 108px);
+}
+
+.table-arena.seats-6 {
+  --slot-card: clamp(52px, 8.6vh, 98px);
+}
+
+/* Feld für die Sitzplätze: oben und unten so weit eingerückt, dass eine
+   halbe Karte samt Namenszeile hineinpasst. */
+.seat-field {
+  position: absolute;
+  /* Unten zusätzlich Platz für die Namenszeile unter der Karte */
+  inset: calc(var(--slot-card) * 0.78 + 8px) calc(var(--slot-card) * 0.5 + 12px)
+    calc(var(--slot-card) * 0.78 + 32px);
+}
+
+/* Verbindungslinie beim Aufdecken */
+.table-connector {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.table-connector line {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 9 7;
+  animation: connector-flow 700ms linear infinite;
+}
+
+@keyframes connector-flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
 .seat {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -245,6 +288,14 @@ button:focus-visible {
 
 .seat.highlight {
   box-shadow: 0 0 0 2px var(--accent), 0 0 30px rgba(236, 57, 89, 0.45);
+  z-index: 3;
+}
+
+/* Beim Aufdecken treten Unbeteiligte zurück, damit der Blick bei der
+   Karte landet, um die es gerade geht. */
+.seat.faded {
+  opacity: 0.32;
+  transition: opacity 350ms ease;
 }
 
 .seat-you {
@@ -277,7 +328,15 @@ button:focus-visible {
   --card-w: calc(var(--slot-card) * 0.66);
 }
 
+/* Hängt unter der Karte, ohne die Sitzhöhe zu verändern — dadurch bleibt der
+   Ankerpunkt des Platzes exakt die Kartenmitte, und die Karten zeigen genau
+   aufeinander statt leicht daneben. */
 .seat-info {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -325,17 +384,50 @@ button:focus-visible {
   }
 }
 
-/* Zug-Steuerung direkt neben der eigenen Karte */
-.seat-controls {
+/* Zug-Steuerung: die Karte bleibt in der Mitte, die Richtungs-Schaltflächen
+   liegen dort, wohin sie zeigen. */
+.picker {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas:
+    '.    confirm .'
+    'left card    right'
+    '.    self    .'
+    '.    joker   .';
+  align-items: center;
+  justify-items: center;
+  gap: 8px;
+}
+
+.pick-card {
+  grid-area: card;
+}
+
+.pick-confirm {
+  grid-area: confirm;
+}
+
+.pick-confirm.is-off {
+  visibility: hidden;
+}
+
+.pick-left {
+  grid-area: left;
+}
+
+.pick-right {
+  grid-area: right;
+}
+
+.pick-self {
+  grid-area: self;
+}
+
+.pick-joker {
+  grid-area: joker;
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 8px 12px;
-  box-shadow: var(--shadow);
+  gap: 5px;
 }
 
 .direction-row {
@@ -384,11 +476,11 @@ button:focus-visible {
 }
 
 .table-screen .rule-current .card-slot {
-  --card-w: clamp(56px, 10vh, 112px);
+  --card-w: clamp(78px, 13.5vh, 160px);
 }
 
 .table-screen .rule-preview .card-slot {
-  --card-w: clamp(38px, 6.8vh, 74px);
+  --card-w: clamp(50px, 8.5vh, 100px);
 }
 
 .pool-badge {
@@ -529,8 +621,9 @@ button:focus-visible {
   justify-content: center;
 }
 
+/* Die eigene Hand ist das, was man wirklich lesen muss — hier am größten. */
 .table-screen .hand .card-slot {
-  --card-w: clamp(50px, 9.2vh, 92px);
+  --card-w: clamp(74px, 13vh, 148px);
 }
 
 .hand-undo {
@@ -559,6 +652,28 @@ button:focus-visible {
 .modal-hand {
   max-height: 42vh;
   overflow-y: auto;
+}
+
+/* Flache Fenster: Der Mittelblock muss zwischen die Sitzplätze oben und
+   unten passen, also Beschriftungen weglassen und enger setzen. */
+@media (max-height: 800px) {
+  .table-core .field-label {
+    display: none;
+  }
+
+  .table-core {
+    gap: 3px;
+  }
+
+  .step-caption {
+    font-size: 13px;
+    padding: 2px 8px;
+    min-height: 0;
+  }
+
+  .rule-area {
+    gap: 8px;
+  }
 }
 
 /* Schmale Fenster: Der Sitzkreis muss sechs Plätze und die Tischmitte
@@ -646,15 +761,11 @@ button:focus-visible {
   --h: calc(var(--w) * 96 / 66);
   position: relative;
   display: inline-block;
-  width: var(--w);
-  height: var(--h);
+  /* Belegt genau den Platz, den die gedrehte Karte braucht */
+  width: calc(var(--w) * var(--slot-fw, 1));
+  height: calc(var(--w) * var(--slot-fh, 1.4545));
   flex-shrink: 0;
   vertical-align: bottom;
-}
-
-.card-slot.quarter {
-  width: var(--h);
-  height: var(--w);
 }
 
 .card {
