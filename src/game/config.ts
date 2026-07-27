@@ -7,6 +7,15 @@ export { ACTION_FREQUENCIES } from './deckData'
 
 export const HAND_SIZE = 7
 
+/**
+ * Wertebereich einer Karte im Spiel. Aufgedruckt sind 1 bis 9, aber
+ * "Wert ändern" darf darüber hinaus: eine 9 wird zur 10, eine 1 zur 0.
+ * Die 0 zählt als gerade Zahl (mathematisch eindeutig) und kann über
+ * "Niedrige Zahlen" auch gewinnen.
+ */
+export const MIN_VALUE = 0
+export const MAX_VALUE = 10
+
 // 0 = Endlosspiel (kein Punkteziel) — Infinity wäre nicht JSON-serialisierbar
 // und würde beim Senden über PeerJS verloren gehen.
 export const TARGET_OPTIONS: readonly number[] = [3, 5, 7, 10, 0]

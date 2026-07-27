@@ -68,13 +68,31 @@ describe('resolveRound – Aktionen', () => {
     expect(finalOf(res, 'p1').value).toBeNull()
   })
 
-  it('plus clampt bei 9, minus bei 1', () => {
-    const res = run([
+  it('erlaubt 10 und 0, aber nicht darüber hinaus', () => {
+    const hoch = run([
       play('p0', { value: 9, action: 'plus' }, 'self'),
       play('p1', { value: 1, action: 'minus' }, 'self'),
     ])
-    expect(finalOf(res, 'p0').value).toBe(9)
-    expect(finalOf(res, 'p1').value).toBe(1)
+    expect(finalOf(hoch, 'p0').value).toBe(10)
+    expect(finalOf(hoch, 'p1').value).toBe(0)
+
+    // zwei Erhöhungen auf dieselbe 9er-Karte kommen trotzdem nur bis 10
+    const grenze = run([
+      play('p0', { value: 5, action: 'plus' }, 'left'),
+      play('p1', { value: 9, action: 'none' }, 'self'),
+      play('p2', { value: 5, action: 'plus' }, 'right'),
+    ])
+    expect(finalOf(grenze, 'p1').value).toBe(10)
+  })
+
+  it('die 0 gilt als gerade Zahl', () => {
+    const res = run([
+      play('p0', { value: 1, action: 'minus' }, 'self'),
+      play('p1', { value: 5, action: 'none' }, 'self'),
+    ])
+    const null_ = finalOf(res, 'p0').value!
+    expect(null_).toBe(0)
+    expect(null_ % 2).toBe(0)
   })
 
   it('Farbe tauschen ist bidirektional', () => {

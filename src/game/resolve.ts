@@ -1,3 +1,4 @@
+import { MAX_VALUE, MIN_VALUE } from './config'
 import type { FinalCard } from './winner'
 import type {
   ActionKind,
@@ -195,7 +196,10 @@ export function resolveRound(args: {
   const findProtection = (targetSeat: number, attackerSeat: number, kind: 'shield' | 'mirror') =>
     protections.find((p) => p.kind === kind && p.ownerSeat === targetSeat && p.fromSeat === attackerSeat)
 
-  const clamp = (v: number) => Math.max(1, Math.min(9, v))
+  // Aufgedruckt sind 1 bis 9; durch "Wert ändern" kann eine Karte auf 0 fallen
+  // oder auf 10 steigen. Die 0 ist mathematisch eine gerade Zahl und erfüllt
+  // damit die Bedingung "Gerade Zahlen".
+  const clamp = (v: number) => Math.max(MIN_VALUE, Math.min(MAX_VALUE, v))
   const face = (seat: number): CardFace => ({ ...slots[seat].face })
 
   // Phase B: Aktionen in Sitzreihenfolge ab dem Startspieler.

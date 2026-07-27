@@ -86,6 +86,7 @@ export function CardView({
   card,
   ruleCard,
   state,
+  stateOffset,
   back,
   arrow,
   angleDeg,
@@ -101,6 +102,8 @@ export function CardView({
   ruleCard?: RuleCard
   /** Ist-Zustand nach Aktionen — weicht er von der Karte ab, wird er eingeblendet */
   state?: CardState | null
+  /** Richtung, in die der Ist-Wert neben die Karte rückt (Einheitsvektor) */
+  stateOffset?: { x: number; y: number } | null
   /** Rückseite zeigen */
   back?: boolean
   /** Grobe Richtung in 90-Grad-Schritten (für Galerie und Vorschauen) */
@@ -166,6 +169,9 @@ export function CardView({
           '--slot-fh': bounds ? bounds.height / 66 : 96 / 66,
           '--card-state-color':
             state?.color != null ? COLOR_HEX[state.color] : modified ? 'var(--ink-dim)' : 'transparent',
+          // Verschiebt den Ist-Wert in den freien Raum neben der Karte
+          '--state-dx': stateOffset?.x ?? 0,
+          '--state-dy': stateOffset?.y ?? 0,
         } as React.CSSProperties
       }
     >

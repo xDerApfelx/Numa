@@ -70,6 +70,21 @@ describe('determineWinner', () => {
     expect(res.winnerId).toBe('b')
   })
 
+  it('0 erfüllt "Gerade Zahlen" und gewinnt bei "Niedrige Zahlen"', () => {
+    const niedrig = rule({ color: 'red', parity: null, range: 'low' })
+    expect(determineWinner([card('a', 'red', 0), card('b', 'red', 2)], niedrig, false).winnerId).toBe('a')
+
+    const geradeNiedrig = rule({ color: 'red', parity: 'even', range: 'low' })
+    expect(
+      determineWinner([card('a', 'red', 0), card('b', 'red', 3)], geradeNiedrig, false).winnerId,
+    ).toBe('a')
+  })
+
+  it('10 erfüllt "Gerade Zahlen" und gewinnt bei "Hohe Zahlen"', () => {
+    const hoch = rule({ color: 'blue', parity: 'even', range: 'high' })
+    expect(determineWinner([card('a', 'blue', 10), card('b', 'blue', 8)], hoch, false).winnerId).toBe('a')
+  })
+
   it('secondWins: Zweitplatzierter gewinnt', () => {
     const r = rule({ color: 'red', parity: null, range: 'high' })
     const res = determineWinner([card('a', 'red', 9), card('b', 'red', 7), card('c', 'red', 2)], r, true)

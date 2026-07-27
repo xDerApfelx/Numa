@@ -244,6 +244,16 @@ export function GameTable({
     return pointingAngle(from, positions[targetSeat], arena.width, arena.height)
   }
 
+  /** Richtung vom Sitzplatz zur Tischmitte — dorthin rückt der Ist-Wert. */
+  const towardCenter = (seat: number) => {
+    const pos = positions[seat]
+    if (!pos || !arena.width) return null
+    const dx = ((50 - pos.xPct) / 100) * arena.width
+    const dy = ((50 - pos.yPct) / 100) * arena.height
+    const len = Math.hypot(dx, dy) || 1
+    return { x: dx / len, y: dy / len }
+  }
+
   /** Mittelpunkt eines Sitzplatzes in Pixeln, für die Verbindungslinie. */
   const seatPoint = (playerId: string) => {
     const seat = pub.players.findIndex((p) => p.id === playerId)
@@ -348,6 +358,7 @@ export function GameTable({
               width={110}
               card={entry.card}
               state={entry.state}
+              stateOffset={towardCenter(seat)}
               angleDeg={played ? cardAngle(seat, played.direction) : 0}
             />
           )}

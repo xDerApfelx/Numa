@@ -853,6 +853,8 @@ button:focus-visible {
   width: var(--badge);
   height: var(--badge);
   margin: calc(var(--badge) / -2) 0 0 calc(var(--badge) / -2);
+  /* Rückt in den freien Raum zwischen Karte und Tischmitte */
+  translate: calc(var(--state-dx, 0) * var(--w) * 0.92) calc(var(--state-dy, 0) * var(--w) * 0.92);
   display: flex;
   align-items: center;
   justify-content: center;
