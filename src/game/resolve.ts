@@ -79,9 +79,10 @@ interface Slot {
 
 interface Protection {
   kind: 'shield' | 'mirror'
+  /** Wer sich schützt */
   ownerSeat: number
-  protectedSeat: number
-  charge: boolean
+  /** Aus dieser Richtung wird abgewehrt — nur Angriffe von diesem Platz */
+  fromSeat: number
 }
 
 export function resolveRound(args: {
@@ -173,24 +174,26 @@ export function resolveRound(args: {
     }
   }
 
-  // Schutzregister nach eventuellen Verschiebungen: Schild/Spiegel schützen
-  // die Person, auf die ihr Pfeil zeigt, mit genau einer Ladung.
+  // Schutzregister nach eventuellen Verschiebungen: Schild und Spiegel wehren
+  // Angriffe aus der Richtung ab, in die ihr Pfeil zeigt. Wer auf sich selbst
+  // zeigt, wehrt nichts ab — man muss sich entscheiden, von welcher Seite man
+  // einen Angriff erwartet.
   const protections: Protection[] = []
   for (const seat of seatOrder) {
     const slot = slots[seat]
     if (suppressedSeats.has(seat)) continue
+    if (slot.direction === 'self') continue
     if (slot.card.action === 'shield' || slot.card.action === 'mirror') {
       protections.push({
         kind: slot.card.action,
         ownerSeat: seat,
-        protectedSeat: neighborSeat(seat, slot.direction, n),
-        charge: true,
+        fromSeat: neighborSeat(seat, slot.direction, n),
       })
     }
   }
 
-  const findProtection = (targetSeat: number, kind: 'shield' | 'mirror') =>
-    protections.find((p) => p.kind === kind && p.protectedSeat === targetSeat && p.charge)
+  const findProtection = (targetSeat: number, attackerSeat: number, kind: 'shield' | 'mirror') =>
+    protections.find((p) => p.kind === kind && p.ownerSeat === targetSeat && p.fromSeat === attackerSeat)
 
   const clamp = (v: number) => Math.max(1, Math.min(9, v))
   const face = (seat: number): CardFace => ({ ...slots[seat].face })
@@ -213,10 +216,11 @@ export function resolveRound(args: {
     let targetSeat = neighborSeat(seat, slot.direction, n)
     let reflected: Protection | undefined
 
+    // Nur ein Angriff auf jemand anderen kann abgewehrt werden — und nur,
+    // wenn dessen Schild oder Spiegel genau in meine Richtung zeigt.
     if (targetSeat !== seat) {
-      const shield = findProtection(targetSeat, 'shield')
+      const shield = findProtection(targetSeat, seat, 'shield')
       if (shield) {
-        shield.charge = false
         steps.push({
           type: 'blocked',
           actorId,
@@ -226,9 +230,8 @@ export function resolveRound(args: {
         })
         continue
       }
-      const mirror = findProtection(targetSeat, 'mirror')
+      const mirror = findProtection(targetSeat, seat, 'mirror')
       if (mirror) {
-        mirror.charge = false
         reflected = mirror
         targetSeat = seat // Aktion trifft den Angreifer selbst
       }

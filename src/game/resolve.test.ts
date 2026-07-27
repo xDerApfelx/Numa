@@ -96,54 +96,90 @@ describe('resolveRound – Aktionen', () => {
     expect(finalOf(res, 'p1').color).toBe('red')
   })
 
-  it('Schild blockt die erste eingehende Aktion, die zweite geht durch', () => {
+  // Sitzordnung p0, p1, p2: links von i = (i+1)%3, rechts = (i-1+3)%3.
+  // Schild und Spiegel wehren nur Angriffe aus der Richtung ab, in die ihr
+  // Pfeil zeigt — man muss sich also entscheiden, woher man den Angriff
+  // erwartet.
+
+  it('Schild wehrt den Angriff aus der Pfeilrichtung ab', () => {
     const res = run([
-      play('p0', { value: 5, action: 'plus' }, 'left'), // -> p1, geblockt
-      play('p1', { value: 4, action: 'shield' }, 'self'),
-      play('p2', { value: 6, action: 'plus' }, 'right'), // -> p1, geht durch
+      play('p0', { value: 5, action: 'plus' }, 'left'), // greift p1 an
+      play('p1', { value: 4, action: 'shield' }, 'right'), // rechts von p1 ist p0
+      play('p2', { value: 2, action: 'none' }, 'self'),
+    ])
+    expect(finalOf(res, 'p1').value).toBe(4)
+    expect(res.steps.find((s) => s.type === 'blocked')).toMatchObject({
+      actorId: 'p0',
+      targetId: 'p1',
+      shieldOwnerId: 'p1',
+    })
+  })
+
+  it('Schild aus der falschen Richtung hilft nicht', () => {
+    const res = run([
+      play('p0', { value: 5, action: 'plus' }, 'left'), // greift p1 an
+      play('p1', { value: 4, action: 'shield' }, 'left'), // schaut auf p2, nicht auf p0
+      play('p2', { value: 2, action: 'none' }, 'self'),
     ])
     expect(finalOf(res, 'p1').value).toBe(5)
-    const blocked = res.steps.find((s) => s.type === 'blocked')
-    expect(blocked).toMatchObject({ actorId: 'p0', targetId: 'p1', shieldOwnerId: 'p1' })
+    expect(res.steps.some((s) => s.type === 'blocked')).toBe(false)
   })
 
-  it('Schild kann den Nachbarn schützen', () => {
+  it('Schild auf sich selbst wehrt nichts ab', () => {
     const res = run([
-      play('p0', { value: 5, action: 'minus' }, 'right'), // -> p2
-      play('p1', { value: 4, action: 'shield' }, 'left'), // schützt p2
-      play('p2', { value: 6, action: 'plus' }, 'self'),
+      play('p0', { value: 5, action: 'plus' }, 'left'),
+      play('p1', { value: 4, action: 'shield' }, 'self'),
+      play('p2', { value: 2, action: 'none' }, 'self'),
     ])
-    // p0s minus wird geblockt, p2s eigenes plus läuft normal
-    expect(finalOf(res, 'p2').value).toBe(7)
+    expect(finalOf(res, 'p1').value).toBe(5)
+    expect(res.steps.some((s) => s.type === 'blocked')).toBe(false)
   })
 
-  it('Spiegel reflektiert auf den Angreifer', () => {
+  it('Schild schützt nur den eigenen Platz, nicht den Nachbarn', () => {
     const res = run([
-      play('p0', { value: 5, action: 'plus' }, 'left'), // -> p1, reflektiert -> p0
-      play('p1', { value: 4, action: 'mirror' }, 'self'),
+      play('p0', { value: 5, action: 'minus' }, 'right'), // greift p2 an
+      play('p1', { value: 4, action: 'shield' }, 'left'), // p1 schaut auf p2
+      play('p2', { value: 6, action: 'none' }, 'self'),
+    ])
+    expect(finalOf(res, 'p2').value).toBe(5) // Angriff geht durch
+  })
+
+  it('zwei Angreifer: nur der aus der Pfeilrichtung wird abgewehrt', () => {
+    const res = run([
+      play('p0', { value: 5, action: 'plus' }, 'left'), // -> p1, aus p1s Sicht rechts
+      play('p1', { value: 4, action: 'shield' }, 'right'), // wehrt p0 ab
+      play('p2', { value: 6, action: 'plus' }, 'left'), // -> p0 ... 2+1=0
+    ])
+    expect(finalOf(res, 'p1').value).toBe(4) // p0 abgewehrt
+    expect(finalOf(res, 'p0').value).toBe(6) // p2 kommt durch
+  })
+
+  it('Spiegel reflektiert den Angriff aus seiner Pfeilrichtung auf den Angreifer', () => {
+    const res = run([
+      play('p0', { value: 5, action: 'plus' }, 'left'), // -> p1
+      play('p1', { value: 4, action: 'mirror' }, 'right'), // schaut auf p0
     ])
     expect(finalOf(res, 'p0').value).toBe(6)
     expect(finalOf(res, 'p1').value).toBe(4)
     expect(res.steps.some((s) => s.type === 'reflected' && s.mirrorOwnerId === 'p1')).toBe(true)
   })
 
+  it('Spiegel aus der falschen Richtung reflektiert nicht', () => {
+    const res = run([
+      play('p0', { value: 5, action: 'plus' }, 'left'),
+      play('p1', { value: 4, action: 'mirror' }, 'left'),
+      play('p2', { value: 2, action: 'none' }, 'self'),
+    ])
+    expect(finalOf(res, 'p1').value).toBe(5)
+    expect(res.steps.some((s) => s.type === 'reflected')).toBe(false)
+  })
+
   it('selbst-gerichtete Aktionen werden nicht geblockt', () => {
     const res = run([
-      play('p0', { value: 4, action: 'shield' }, 'left'), // schützt p1
+      play('p0', { value: 4, action: 'shield' }, 'left'),
       play('p1', { value: 5, action: 'plus' }, 'self'),
     ])
     expect(finalOf(res, 'p1').value).toBe(6)
-  })
-
-  it('Schild hat Vorrang vor Spiegel', () => {
-    const res = run([
-      play('p0', { value: 5, action: 'plus' }, 'right'), // -> p2
-      play('p1', { value: 4, action: 'shield' }, 'left'), // schützt p2
-      play('p2', { value: 6, action: 'mirror' }, 'self'),
-    ])
-    expect(res.steps.some((s) => s.type === 'blocked')).toBe(true)
-    expect(res.steps.some((s) => s.type === 'reflected')).toBe(false)
-    expect(finalOf(res, 'p0').value).toBe(5)
   })
 
   it('Aktionen laufen in Sitzreihenfolge ab dem Startspieler', () => {

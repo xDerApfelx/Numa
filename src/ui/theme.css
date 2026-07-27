@@ -185,7 +185,7 @@ button:focus-visible {
 .table-screen {
   /* Karten müssen groß genug sein, dass man die Aktion darauf lesen kann.
      Bei mehr Mitspielern wird der Kreis enger, also etwas kleiner. */
-  --slot-card: clamp(64px, 11vh, 124px);
+  --slot-card: clamp(60px, 12.4vh, 175px);
   height: 100dvh;
   overflow: hidden;
   display: flex;
@@ -228,20 +228,23 @@ button:focus-visible {
 }
 
 .table-arena.seats-5 {
-  --slot-card: clamp(56px, 9.5vh, 108px);
+  --slot-card: clamp(56px, 11.4vh, 160px);
 }
 
 .table-arena.seats-6 {
-  --slot-card: clamp(52px, 8.6vh, 98px);
+  --slot-card: clamp(52px, 10.4vh, 145px);
 }
 
 /* Feld für die Sitzplätze: oben und unten so weit eingerückt, dass eine
    halbe Karte samt Namenszeile hineinpasst. */
 .seat-field {
   position: absolute;
-  /* Unten zusätzlich Platz für die Namenszeile unter der Karte */
-  inset: calc(var(--slot-card) * 0.78 + 8px) calc(var(--slot-card) * 0.5 + 12px)
-    calc(var(--slot-card) * 0.78 + 32px);
+  /* Eingerückt um eine halbe Kartenhöhe, damit die Karten am Rand vollständig
+     Platz haben. Die Namenszeilen liegen außerhalb des Kreises und dürfen in
+     die Randzone ragen. */
+  /* Oben Platz für die Namenszeile über der Karte, unten für die Zugleiste */
+  inset: calc(var(--slot-card) * 0.74 + 30px) calc(var(--slot-card) * 0.5 + 12px)
+    calc(var(--slot-card) * 0.74 + 54px);
 }
 
 /* Verbindungslinie beim Aufdecken */
@@ -328,7 +331,7 @@ button:focus-visible {
   --card-w: calc(var(--slot-card) * 0.66);
 }
 
-/* Hängt unter der Karte, ohne die Sitzhöhe zu verändern — dadurch bleibt der
+/* Hängt an der Karte, ohne die Sitzhöhe zu verändern — dadurch bleibt der
    Ankerpunkt des Platzes exakt die Kartenmitte, und die Karten zeigen genau
    aufeinander statt leicht daneben. */
 .seat-info {
@@ -337,11 +340,20 @@ button:focus-visible {
   left: 50%;
   transform: translateX(-50%);
   margin-top: 4px;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* Sitze in der oberen Hälfte tragen den Namen über der Karte, damit die
+   Beschriftung nie in die Tischmitte ragt. */
+.seat.name-above .seat-info {
+  top: auto;
+  bottom: 100%;
+  margin: 0 0 4px;
 }
 
 .seat.opposite .seat-info::after {
@@ -384,50 +396,48 @@ button:focus-visible {
   }
 }
 
-/* Zug-Steuerung: die Karte bleibt in der Mitte, die Richtungs-Schaltflächen
-   liegen dort, wohin sie zeigen. */
+/* Zug-Steuerung: die Karte bleibt an ihrem Platz, die Schaltflächen schweben
+   drumherum. Sie liegen außerhalb des Textflusses, damit der Sitzplatz seine
+   Größe behält und nichts in den Tisch hineinragt. */
 .picker {
-  display: grid;
-  grid-template-columns: auto auto auto;
-  grid-template-areas:
-    '.    confirm .'
-    'left card    right'
-    '.    self    .'
-    '.    joker   .';
-  align-items: center;
-  justify-items: center;
-  gap: 8px;
+  position: relative;
 }
 
-.pick-card {
-  grid-area: card;
-}
-
-.pick-confirm {
-  grid-area: confirm;
-}
-
-.pick-confirm.is-off {
-  visibility: hidden;
+.pick-left,
+.pick-right {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  z-index: 5;
 }
 
 .pick-left {
-  grid-area: left;
+  right: 100%;
+  margin-right: 12px;
 }
 
 .pick-right {
-  grid-area: right;
+  left: 100%;
+  margin-left: 12px;
 }
 
-.pick-self {
-  grid-area: self;
-}
-
-.pick-joker {
-  grid-area: joker;
+.pick-actions {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 10px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+/* Beim Auswählen macht die Zugleiste den Platz unter der Karte frei */
+.seat-stack.picking + .seat-info {
+  display: none;
 }
 
 .direction-row {
@@ -455,6 +465,16 @@ button:focus-visible {
   pointer-events: none;
 }
 
+/* Statuszeile in der Kopfleiste — nimmt dem Spieltisch keine Höhe weg */
+.table-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
 .rule-area {
   display: flex;
   align-items: flex-end;
@@ -475,12 +495,14 @@ button:focus-visible {
   gap: 6px;
 }
 
+/* Die Regelkarte muss zwischen den oberen und unteren Sitzplatz passen —
+   deshalb hängt ihre Größe an der Fensterhöhe, nicht an einem festen Maß. */
 .table-screen .rule-current .card-slot {
-  --card-w: clamp(78px, 13.5vh, 160px);
+  --card-w: clamp(62px, 11.8vh, 168px);
 }
 
 .table-screen .rule-preview .card-slot {
-  --card-w: clamp(50px, 8.5vh, 100px);
+  --card-w: clamp(44px, 7.6vh, 108px);
 }
 
 .pool-badge {
@@ -496,8 +518,7 @@ button:focus-visible {
 
 .step-caption {
   margin: 0;
-  min-height: 22px;
-  max-width: 34ch;
+  max-width: 60ch;
   text-align: center;
   font-family: var(--font-display);
   font-weight: 600;
@@ -547,12 +568,18 @@ button:focus-visible {
   }
 }
 
-/* Aktions-Einblendung über der betroffenen Karte */
-.action-effect {
-  --size: clamp(44px, 7.6vh, 76px);
+/* Der Effekt liegt mitten auf der Verbindungslinie zwischen Akteur und Ziel */
+.effect-layer {
   position: absolute;
-  left: 50%;
-  top: 50%;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.action-effect {
+  --size: clamp(78px, 13vh, 136px);
+  position: absolute;
+  left: 0;
+  top: 0;
   width: var(--size);
   height: var(--size);
   margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
@@ -560,10 +587,10 @@ button:focus-visible {
   place-items: center;
   border-radius: 50%;
   background: rgba(19, 18, 23, 0.9);
-  border: 2.5px solid currentColor;
+  border: 3.5px solid currentColor;
+  box-shadow: 0 0 0 6px rgba(19, 18, 23, 0.75), 0 8px 24px rgba(0, 0, 0, 0.6);
   pointer-events: none;
-  animation: effect-pop 1.3s ease-out forwards;
-  z-index: 4;
+  animation: effect-pop 1.9s ease-out forwards;
 }
 
 .action-effect svg {
@@ -623,12 +650,9 @@ button:focus-visible {
 
 /* Die eigene Hand ist das, was man wirklich lesen muss — hier am größten. */
 .table-screen .hand .card-slot {
-  --card-w: clamp(74px, 13vh, 148px);
+  --card-w: clamp(70px, 12.6vh, 185px);
 }
 
-.hand-undo {
-  color: var(--ink-dim);
-}
 
 .modal-backdrop {
   position: fixed;
@@ -654,8 +678,6 @@ button:focus-visible {
   overflow-y: auto;
 }
 
-/* Flache Fenster: Der Mittelblock muss zwischen die Sitzplätze oben und
-   unten passen, also Beschriftungen weglassen und enger setzen. */
 @media (max-height: 800px) {
   .table-core .field-label {
     display: none;

@@ -23,16 +23,16 @@ export const DEFAULT_OPTIONS: GameOptions = {
 // ist.
 
 /** Pause zwischen den einzelnen Karten beim Umdrehen. */
-export const REVEAL_FLIP_MS = 650
+export const REVEAL_FLIP_MS = 800
 
 /** Gesamtdauer eines Aktions-Schritts. */
-export const REVEAL_STEP_MS = 2200
+export const REVEAL_STEP_MS = 3100
 
 /** Innerhalb eines Schritts: erst ankündigen, dann nach dieser Zeit auswirken. */
-export const REVEAL_EFFECT_DELAY_MS = 850
+export const REVEAL_EFFECT_DELAY_MS = 1200
 
 /** Nach dem letzten Schritt: Zeit für Gewinner-Banner und Durchatmen. */
-export const REVEAL_END_PAUSE_MS = 3000
+export const REVEAL_END_PAUSE_MS = 3600
 
 /** Bedenkzeit der Bots, damit Züge nicht durchrauschen. */
 export const BOT_THINK_MIN_MS = 1400

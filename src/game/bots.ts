@@ -32,7 +32,9 @@ function chooseDirection(card: HandCard, rule: RuleCard, rng: Rng): Direction {
       return rule.range === 'low' ? 'self' : neighbor
     case 'shield':
     case 'mirror':
-      return 'self'
+      // Schild und Spiegel wehren nur aus der Pfeilrichtung ab — auf sich
+      // selbst gerichtet wären sie wirkungslos.
+      return neighbor
     case 'copyColor':
     case 'copyValue':
     case 'swapColor':

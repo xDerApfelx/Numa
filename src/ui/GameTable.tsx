@@ -10,7 +10,7 @@ import type { NumaClient } from '../net/client'
 import type { NumaHost } from '../net/host'
 import type { PublicState } from '../net/protocol'
 import { ActionEffect, effectFor } from './ActionEffect'
-import { actionLabel, CardView, jokerLabel, type CardState } from './CardView'
+import { actionLabel, CardView, jokerLabel, ruleLabel, type CardState } from './CardView'
 import { outwardAngle, pointingAngle, seatPositions } from './tableLayout'
 import { useElementSize } from './useElementSize'
 
@@ -382,7 +382,36 @@ export function GameTable({
         <span className="round-chip dim">
           {pub.options.targetScore > 0 ? `Ziel: ${pub.options.targetScore} Regelkarten` : 'Endlosspiel'}
         </span>
-        <span className="round-chip dim">Nachziehstapel: {pub.drawCount}</span>
+
+        {/* Was gerade passiert, steht in der Kopfzeile — dort ist Platz frei
+            und es nimmt dem Spieltisch keine Höhe weg. */}
+        <div className="table-status">
+          {revealing && !progress.done && <span className="step-caption">{caption(currentStep)}</span>}
+          {revealing &&
+            progress.done &&
+            (pub.lastWinnerId ? (
+              <span className="round-banner win">
+                {nameOf(pub.lastWinnerId)} gewinnt die Runde
+                {pub.lastPoolWin > 0
+                  ? ` und räumt ${pub.lastPoolWin} Pool-Karte${pub.lastPoolWin > 1 ? 'n' : ''} ab!`
+                  : '!'}
+              </span>
+            ) : (
+              <span className="round-banner tie">Unentschieden — Regelkarte wandert in den Pool</span>
+            ))}
+          {pub.phase === 'playing' && (
+            <span className="step-caption dim">
+              {myTurn
+                ? onlyJokersInHand
+                  ? 'Nur Joker auf der Hand — wirf einen ab'
+                  : selectedCard
+                    ? 'Wohin zeigt der Pfeil?'
+                    : 'Du bist dran — wähle eine Karte'
+                : `${nameOf(pub.players[pub.turnIndex]?.id ?? '')} ist dran …`}
+            </span>
+          )}
+        </div>
+
         <button className="btn btn-small" style={{ marginLeft: 'auto' }} onClick={onLeave}>
           Verlassen
         </button>
@@ -410,11 +439,27 @@ export function GameTable({
           </svg>
         )}
 
+        {/* Der Effekt sitzt mitten auf der Verbindungslinie — da schaut man
+            beim Aufdecken ohnehin hin. Ohne Linie liegt er auf der Karte. */}
+        {activeEffect &&
+          (() => {
+            const target = seatPoint(activeEffect.playerId)
+            if (!target) return null
+            const at = connector
+              ? { x: (connector.a.x + connector.b.x) / 2, y: (connector.a.y + connector.b.y) / 2 }
+              : target
+            return (
+              <div className="effect-layer" style={{ left: at.x, top: at.y }}>
+                <ActionEffect effect={activeEffect} />
+              </div>
+            )
+          })()}
+
         {positions.map((pos) => {
           const player = pub.players[pos.seat]
           const isYou = player.id === youId
           const isTurn = pub.phase === 'playing' && pos.seat === pub.turnIndex
-          const effect = activeEffect?.playerId === player.id ? activeEffect : null
+
           // Während eines Aufdeck-Schritts treten Unbeteiligte zurück
           const faded = revealing && currentStep !== null && !highlightIds.has(player.id)
           return (
@@ -427,63 +472,73 @@ export function GameTable({
                 highlightIds.has(player.id) && 'highlight',
                 faded && 'faded',
                 pos.opposite && 'opposite',
+                // Namen liegen immer außen am Kreis, nie zur Tischmitte hin
+                pos.yPct < 50 && 'name-above',
               ]
                 .filter(Boolean)
                 .join(' ')}
               style={{ left: `${pos.xPct}%`, top: `${pos.yPct}%` }}
             >
-              <div className="seat-stack">
+              <div className={`seat-stack${isYou && myTurn && selectedCard ? ' picking' : ''}`}>
                 {isYou && myTurn && selectedCard ? (
                   // Karte bleibt in der Mitte, die Richtungen liegen drumherum
                   <div className="picker">
-                    <button
-                      className={`btn btn-primary btn-small pick-confirm ${!direction ? 'is-off' : ''}`}
-                      disabled={!direction}
-                      onClick={playCard}
-                    >
-                      Karte legen
-                    </button>
+                    <div className="pick-card">{renderSeatCard(pos.seat)}</div>
                     <button
                       className={`btn btn-small pick-left ${direction === 'left' ? 'toggle on' : ''}`}
                       onClick={() => setDirection('left')}
                     >
                       ◀ Links
                     </button>
-                    <div className="pick-card">{renderSeatCard(pos.seat)}</div>
                     <button
                       className={`btn btn-small pick-right ${direction === 'right' ? 'toggle on' : ''}`}
                       onClick={() => setDirection('right')}
                     >
                       Rechts ▶
                     </button>
-                    <button
-                      className={`btn btn-small pick-self ${direction === 'self' ? 'toggle on' : ''}`}
-                      onClick={() => setDirection('self')}
-                    >
-                      Auf mich ▼
-                    </button>
-                    {needsJokerDirection && (
-                      <div className="pick-joker">
-                        <span className="joker-note">Joker:</span>
-                        <button
-                          className={`btn btn-small ${jokerDirection === 'left' ? 'toggle on' : ''}`}
-                          onClick={() => setJokerDirection('left')}
-                        >
-                          ◀
-                        </button>
-                        <button
-                          className={`btn btn-small ${jokerDirection === 'right' ? 'toggle on' : ''}`}
-                          onClick={() => setJokerDirection('right')}
-                        >
-                          ▶
-                        </button>
-                      </div>
-                    )}
+                    <div className="pick-actions">
+                      <button
+                        className={`btn btn-small ${direction === 'self' ? 'toggle on' : ''}`}
+                        onClick={() => setDirection('self')}
+                      >
+                        ▼ Auf mich
+                      </button>
+                      {needsJokerDirection && (
+                        <>
+                          <span className="joker-note">Joker</span>
+                          <button
+                            className={`btn btn-small ${jokerDirection === 'left' ? 'toggle on' : ''}`}
+                            onClick={() => setJokerDirection('left')}
+                          >
+                            ◀
+                          </button>
+                          <button
+                            className={`btn btn-small ${jokerDirection === 'right' ? 'toggle on' : ''}`}
+                            onClick={() => setJokerDirection('right')}
+                          >
+                            ▶
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="btn btn-small pick-undo"
+                        title="Auswahl zurücknehmen"
+                        onClick={() => {
+                          setSelectedId(null)
+                          setJokerId(null)
+                          setDirection(null)
+                        }}
+                      >
+                        ✕
+                      </button>
+                      <button className="btn btn-primary btn-small" disabled={!direction} onClick={playCard}>
+                        Karte legen
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   renderSeatCard(pos.seat)
                 )}
-                {effect && <ActionEffect effect={effect} />}
               </div>
 
               <div className="seat-info">
@@ -502,16 +557,20 @@ export function GameTable({
         })}
         </div>
 
+        {/* Nur die Regelkarten stehen in der Tischmitte — Beschriftungen
+            würden sonst mit den Sitzplätzen kollidieren. */}
         <div className="table-core">
           <div className="rule-area">
             <div className="rule-current">
-              <span className="field-label">Regelkarte</span>
-              <CardView width={112} ruleCard={shownRule} />
+              <CardView width={112} ruleCard={shownRule} label={`Regelkarte: ${ruleLabel(shownRule)}`} />
             </div>
             <div className="rule-side">
               <div className="rule-preview">
-                <span className="field-label">Vorschau</span>
-                {pub.preview ? <CardView width={74} ruleCard={pub.preview} dimmed /> : <CardView width={74} />}
+                {pub.preview ? (
+                  <CardView width={74} ruleCard={pub.preview} dimmed label={`Vorschau: ${ruleLabel(pub.preview)}`} />
+                ) : (
+                  <CardView width={74} />
+                )}
               </div>
               {pub.poolSize > 0 && (
                 <div className="pool-badge" title="Regelkarten im Pool (Pool Extrem)">
@@ -520,31 +579,6 @@ export function GameTable({
               )}
             </div>
           </div>
-
-          {revealing && <p className="step-caption">{caption(currentStep)}</p>}
-          {revealing && progress.done && (
-            pub.lastWinnerId ? (
-              <div className="round-banner win">
-                {nameOf(pub.lastWinnerId)} gewinnt die Runde
-                {pub.lastPoolWin > 0
-                  ? ` und räumt ${pub.lastPoolWin} Pool-Karte${pub.lastPoolWin > 1 ? 'n' : ''} ab!`
-                  : '!'}
-              </div>
-            ) : (
-              <div className="round-banner tie">Unentschieden — die Regelkarte wandert in den Pool</div>
-            )
-          )}
-          {pub.phase === 'playing' && (
-            <p className="step-caption dim">
-              {myTurn
-                ? onlyJokersInHand
-                  ? 'Nur Joker auf der Hand — wirf einen ab'
-                  : selectedCard
-                    ? 'Wohin zeigt der Pfeil?'
-                    : 'Du bist dran — wähle eine Karte'
-                : `${nameOf(pub.players[pub.turnIndex]?.id ?? '')} ist dran …`}
-            </p>
-          )}
         </div>
       </div>
 
@@ -583,18 +617,6 @@ export function GameTable({
               )
             })}
         </div>
-        {myTurn && selectedCard && (
-          <button
-            className="btn btn-small hand-undo"
-            onClick={() => {
-              setSelectedId(null)
-              setJokerId(null)
-              setDirection(null)
-            }}
-          >
-            Auswahl zurücknehmen
-          </button>
-        )}
       </section>
 
       {pub.phase === 'blackRule' && (
