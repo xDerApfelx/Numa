@@ -185,13 +185,19 @@ export function CardView({
         aria-label={label ?? title}
       >
         <img className="card-art" src={src} alt="" draggable={false} />
-        {modified && (
-          <span className="card-state" aria-hidden="true">
-            {changedValue && <span className="card-state-value">{state!.value ?? '?'}</span>}
-            {changedColor && !changedValue && <span className="card-state-dot" />}
-          </span>
-        )}
       </Tag>
+
+      {/* Der Ist-Wert liegt mittig über der Karte und dreht sich nicht mit —
+          er soll auf einen Blick lesbar sein. */}
+      {modified && (
+        <span className="card-state" aria-hidden="true">
+          {changedValue ? (
+            <span className="card-state-value">{state!.value ?? '?'}</span>
+          ) : (
+            <span className="card-state-dot" />
+          )}
+        </span>
+      )}
     </span>
   )
 }

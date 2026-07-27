@@ -41,7 +41,7 @@ export function Home({
             id="name"
             value={name}
             maxLength={20}
-            placeholder="z. B. Bero"
+            placeholder="Wie heißt du?"
             onChange={(e) => setName(e.target.value)}
           />
         </div>
